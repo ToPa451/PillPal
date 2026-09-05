@@ -6,17 +6,28 @@ Pill★Pal R5 is a true Home Assistant custom integration. It replaces the globa
 
 - Home Assistant 2026.8.0 or newer
 - At least one person created under **Settings → People**
-- HACS only for convenient installation/updates; an additional Lovelace resource is not required
+- HACS installed for convenient installation and updates
 
 ## Installation for Testing
 
+### Option 1: Via HACS (Recommended)
+
+1. Open **HACS** in your Home Assistant sidebar.
+2. Click the **three dots** in the top right corner and select **Custom repositories**.
+3. Paste the repository URL: `https://github.com/ToPa451/PillPal`
+4. Set the Type to **Integration** and click **Add**.
+5. Find **Pill★Pal** in HACS, click **Download**, and restart Home Assistant when prompted.
+
+### Option 2: Manual Installation
+
 1. Copy the `custom_components/pillpal` folder to `/config/custom_components/pillpal`. When performing a manual update, replace the existing folder completely rather than merging it with the new content. This ensures that no old files remain behind, particularly in `__pycache__`.
 2. Restart Home Assistant completely.
-3. Open **Settings → Devices & Services → Add Integration → Pill★Pal**.
-4. Select the people to include and specify whether to start with an inactive example medication or empty. For individuals with their own login, assistance by administrators can optionally be allowed. Individuals without a login are automatically assisted.
-5. Open the personal dashboard **Pill★Pal** or, as an administrator, **Pill★Pal Assistance**. A Home Assistant restart is not required after the setup wizard; if your browser is already open, a single reload with `Ctrl+F5` may be necessary.
 
-Alternatively, the contents of this release folder can be published and added as a standalone HACS repository of type **Integration**.
+### Setup & Initial Configuration
+
+1. Open **Settings → Devices & Services → Add Integration → Pill★Pal**.
+2. Select the people to include and specify whether to start with an inactive example medication or empty. For individuals with their own login, assistance by administrators can optionally be allowed. Individuals without a login are automatically assisted.
+3. Open the personal dashboard **Pill★Pal** or, as an administrator, **Pill★Pal Assistance**. A Home Assistant restart is not required after the setup wizard; if your browser is already open, a single reload with `Ctrl+F5` may be necessary.
 
 ## Dashboard and Navigation
 
