@@ -9,9 +9,9 @@ Pill★Pal is a Home Assistant–based medication manager that goes beyond a sim
 - Automatic tracking of pending, taken, skipped, and missed doses
 - Inventory monitoring with alerts for low stock and approaching expiration dates
 - Timely refill reminders that take medical practice closure periods into account
-- Optional admin-assisted medication intake
 - A central dashboard showing upcoming and past intakes
 - Support for as-needed medication and configurable safety limits
+- Optional admin-assisted medication intake
 
 ## Prerequisites
 
