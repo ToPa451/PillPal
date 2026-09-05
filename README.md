@@ -1,5 +1,7 @@
 ## Pill★Pal
 
+![PillPal Dashboard](PillPal_Mobile_App_Presentation_Mockup.png)
+
 Pill★Pal is a Home Assistant–based medication manager that goes beyond a simple alarm or calendar reminder. It actively supports the entire medication routine—from scheduled reminders to confirmation and documentation.
 
 - User-based management with individual medication plans, schedules, and notifications
