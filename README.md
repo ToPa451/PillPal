@@ -1,4 +1,4 @@
-## Pill★Pal
+# Pill★Pal
 
 ![PillPal Dashboard](PillPal_Mobile_App_Presentation_Mockup.png)
 
@@ -63,9 +63,9 @@ In the Assistance Dashboard, every action is immutably bound to the person selec
 
 ## Data Security and Repair
 
-Pill★Pal validates settings and stored profile, medication, cycle, and slot data before use. If a corrupted or partially migrated store is detected at startup, the integration first saves its unmodified contents separately under a quarantine ID. Only if this backup succeeds is a controlled, repaired state saved as the live store. The dashboard and person-specific log will subsequently indicate the quarantine. Supported older schemas receive a documented migration timestamp. A newer schema that is not supported by this version will be quarantined, but neither downgraded nor overwritten. Unknown store, profile, medication, and runtime fields are not silently imported.
+Pill★Pal validates settings and stored profile, medication, cycle, and slot data before use. If a corrupted store is detected at startup, the integration first saves its unmodified contents separately under a quarantine ID. Only if this backup succeeds is a controlled, repaired state saved as the live store. The dashboard and person-specific log will subsequently indicate the quarantine. A newer schema that is not supported by this version will be quarantined, but neither downgraded nor overwritten. Unknown store, profile, medication, and runtime fields are not silently imported.
 
-The former `dashboard_path` and old output helpers for due status and daily completion are no longer active configuration. Upgrading to data schema 9 cleanly removes existing legacy values without triggering a quarantine or configuration error. Notifications use the internal dashboard path registered by the integration.
+Notifications use the internal dashboard path registered by the integration.
 
 A temporarily missing or incomplete Home Assistant person state deletes neither the profile nor the user link; complete subsequent events update the name and link. Listeners and background tasks are bound to their respective load cycle, ensuring that old callbacks execute no further changes after a reload or shutdown.
 
@@ -75,7 +75,7 @@ Write operations are executed in a fixed revision-based sequence. Dashboard or s
 
 ### Backup, Restore, and Complete Removal
 
-The authoritative backup is a full Home Assistant backup. Before upgrading, rolling back to an older Pill★Pal version, or removing the integration, such a backup should be created and tested for restorability. Reloading or temporarily disabling the integration retains all application data. In contrast, confirming the **removal of the entire Pill★Pal integration entry** permanently deletes its live store and quarantine storage; recovery is then only possible from a previous Home Assistant backup. Removing only a person subentry continues to archive their application data and is not a complete deletion. Prior to archiving or full deletion, Pill★Pal cleans up all known profile-related mobile notifications. If a saved notify service is unavailable when a person is removed, the exact deletion job is preserved and retried once the service returns.
+The authoritative backup is a full Home Assistant backup. Before upgrading or removing the integration, such a backup should be created and tested for restorability. Reloading or temporarily disabling the integration retains all application data. In contrast, confirming the **removal of the entire Pill★Pal integration entry** permanently deletes its live store and quarantine storage; recovery is then only possible from a previous Home Assistant backup. Removing only a person subentry continues to archive their application data and is not a complete deletion. Prior to archiving or full deletion, Pill★Pal cleans up all known profile-related mobile notifications. If a saved notify service is unavailable when a person is removed, the exact deletion job is preserved and retried once the service returns.
 
 ## Automation Entities and Actions
 
@@ -95,7 +95,7 @@ A medication-specific input button confirms the matching regular slot first for 
 
 A currently registered `notify.mobile_app_…` service can be selected directly as a notification target. Pill★Pal updates this selection upon later registration or removal of a service. A valid notify service **or** the active native person-specific entity **Intake Due** suffices as a reminder channel. A warning appears only if both channels are missing for regular medication; dashboard, entity, and log use the exact same logic.
 
-Critical reminders use the alarm default values from R4.0.17 again and list each medication with a bullet point on its own line. Successful helper/button loggings receive a non-alarming 10-second mobile confirmation. Result and rejection messages after a companion action do not have a forced short display duration. Logging directly within the personal or administrative dashboard clears the alarm, but intentionally produces no additional mobile confirmation.
+Critical reminders list each medication with a bullet point on its own line. Successful helper/button loggings receive a non-alarming 10-second mobile confirmation. Result and rejection messages after a companion action do not have a forced short display duration. Logging directly within the personal or administrative dashboard clears the alarm, but intentionally produces no additional mobile confirmation.
 
 After `TAKE` or `SKIP` via a companion action, the feedback response states the next open intake slot or the complete daily cycle. If a subsequent slot is already due, its newly bound actions are directly available within this response. `SKIP` additionally confirms that stock remained unchanged. Upon automatically transitioning to "Missed", Pill★Pal stops repeating and clears the exact old slot notification.
 
@@ -135,6 +135,4 @@ Public actions select the Pill★Pal person profile as a device and display the 
 
 ## Beta Notice
 
-This release contains the new architecture and the first complete user interface. Prior to daily production use, it should be tested on a test instance with realistic person, notification, and automation configurations. Medication decisions must not rely exclusively on Home Assistant.
-
-Source code and installation package are byte-matched using `tools/release_package.py`. The complete automated and physical verification sequence is detailed in `RELEASE_CHECKLIST.md`; intentional deviations from R4 are documented in `CHANGE_SCOPE.md`.
+This release contains the architecture and the complete user interface. Prior to daily production use, it should be tested on a test instance with realistic person, notification, and automation configurations. Medication decisions must not rely exclusively on Home Assistant.
