@@ -1,325 +1,120 @@
-# Pill★Pal R5.1.0 Entwicklungsstand 1
+# Pill★Pal R5.1.0 Development State 1
 
-Pill★Pal R5 ist eine echte Home-Assistant-Custom-Integration. Sie ersetzt die
-globale Pyscript-/Helfer-Umschaltung aus R4.1 durch dauerhaft getrennte
-Personenprofile, eindeutige Entitäten und explizit personenbezogene Aktionen.
+Pill★Pal R5 is a true Home Assistant custom integration. It replaces the global Pyscript/helper toggling from R4.1 with permanently separated person profiles, unique entities, and explicitly person-specific actions.
 
-## Voraussetzungen
+## Prerequisites
 
-- Home Assistant 2026.8.0 oder neuer
-- mindestens eine unter **Einstellungen → Personen** angelegte Person
-- HACS nur für die komfortable Installation/Aktualisierung; eine zusätzliche
-  Lovelace-Ressource ist nicht erforderlich
+- Home Assistant 2026.8.0 or newer
+- At least one person created under **Settings → People**
+- HACS only for convenient installation/updates; an additional Lovelace resource is not required
 
-## Installation zum Testen
+## Installation for Testing
 
-1. Den Ordner `custom_components/pillpal` nach
-   `/config/custom_components/pillpal` kopieren. Bei einem manuellen Update
-   den vorhandenen Ordner vollständig ersetzen und nicht nur mit dem neuen
-   Inhalt zusammenführen. Dadurch bleiben insbesondere keine alten Dateien
-   aus `__pycache__` zurück.
-2. Home Assistant vollständig neu starten.
-3. **Einstellungen → Geräte & Dienste → Integration hinzufügen → Pill★Pal**
-   öffnen.
-4. Die aufzunehmenden Personen auswählen und festlegen, ob ein inaktives
-   Beispielmedikament angelegt oder leer begonnen wird. Bei Personen mit eigenem Login kann
-   optional die Assistenz durch Administratoren erlaubt werden. Personen ohne
-   Login sind automatisch assistiert.
-5. Das persönliche Dashboard **Pill★Pal** beziehungsweise als Administrator
-   **Pill★Pal Assistenz** öffnen. Ein Home-Assistant-Neustart ist nach dem
-   Assistenten nicht erforderlich; bei einem bereits geöffneten Browser kann
-   einmaliges Neuladen mit `Strg+F5` nötig sein.
+1. Copy the `custom_components/pillpal` folder to `/config/custom_components/pillpal`. When performing a manual update, replace the existing folder completely rather than merging it with the new content. This ensures that no old files remain behind, particularly in `__pycache__`.
+2. Restart Home Assistant completely.
+3. Open **Settings → Devices & Services → Add Integration → Pill★Pal**.
+4. Select the people to include and specify whether to start with an inactive example medication or empty. For individuals with their own login, assistance by administrators can optionally be allowed. Individuals without a login are automatically assisted.
+5. Open the personal dashboard **Pill★Pal** or, as an administrator, **Pill★Pal Assistance**. A Home Assistant restart is not required after the setup wizard; if your browser is already open, a single reload with `Ctrl+F5` may be necessary.
 
-Alternativ kann der Inhalt dieses Versionsordners als eigenes HACS-Repository
-des Typs **Integration** veröffentlicht und hinzugefügt werden.
+Alternatively, the contents of this release folder can be published and added as a standalone HACS repository of type **Integration**.
 
-## Dashboard und Navigation
+## Dashboard and Navigation
 
-Die persönlichen und administrativen Dashboards werden von der Integration
-selbst registriert; eine Lovelace-Ressource oder eine zusätzliche Dashboard-YAML
-ist nicht erforderlich. Auf schmalen Bildschirmen öffnet die Menüschaltfläche in
-der Pill★Pal-Kopfzeile die Home-Assistant-Seitenleiste.
+The personal and administrative dashboards are registered by the integration itself; a Lovelace resource or additional dashboard YAML is not required. On narrow screens, the menu button in the Pill★Pal header opens the Home Assistant sidebar.
 
-Horizontales Wischen im freien Seitenbereich wechselt nativ zwischen den
-Pill★Pal-Seiten. Gesten, die in Dropdowns, Eingabefeldern, Schaltflächen,
-Tabellen, Logs oder der Navigationsleiste beginnen, werden nicht als
-Seitenwechsel interpretiert. Die Erweiterung `hass-swipe-navigation` ist daher
-für Pill★Pal nicht erforderlich.
+Horizontal swiping in open page areas natively switches between Pill★Pal pages. Gestures starting inside dropdowns, input fields, buttons, tables, logs, or the navigation bar are not interpreted as page switches. Therefore, the `hass-swipe-navigation` extension is not required for Pill★Pal.
 
-Geänderte Medikamenten- und Einstellungsformulare können mit **Änderungen
-verwerfen** vollständig auf den dauerhaft gespeicherten Stand zurückgesetzt
-werden. Beim Seiten- oder Medikamentenwechsel fragt Pill★Pal vor einem Verlust
-ungespeicherter Eingaben nach. Rückmeldungen zu Speichern, Auffüllen und
-Archivieren stehen unmittelbar bei der ausgelösten Aktion; eine Ablehnung
-bleibt dort zusammen mit den noch korrigierbaren Eingaben sichtbar.
+Modified medication and settings forms can be completely reset to the permanently saved state using **Discard Changes**. When switching pages or medications, Pill★Pal prompts for confirmation before losing unsaved inputs. Feedback on saving, refilling, and archiving appears directly next to the triggered action; a rejection remains visible there along with the inputs that can still be corrected.
 
-Im Assistenz-Dashboard wird jede Aktion unveränderlich an die beim Klick
-ausgewählte Person gebunden. Ein schneller Personenwechsel kann weder die
-laufende Aktion noch deren Aktualisierung auf das neue Profil umlenken.
-Fällige Einnahmen stehen in der mobilen Übersicht vor Status und Historie; im
-Log ist die Systeminformation vor der längeren Ereignisliste angeordnet.
+In the Assistance Dashboard, every action is immutably bound to the person selected at the moment of clicking. Rapidly switching people cannot redirect an active action or its update to the new profile. Due intake slots appear above status and history in the mobile overview; in the log, system information is arranged above the longer event list.
 
-## Daten- und Zugriffsmodell
+## Data and Access Model
 
-- Es gibt genau einen Integrations-Haupteintrag und je aufgenommener Person
-  einen Untereintrag samt logischem Gerät.
-- Jeder schreibende Backend-Aufruf verlangt eine `person_id`. Es existiert kein
-  global ausgewähltes Profil.
-- Ein angemeldeter Benutzer sieht ausschließlich seine verknüpfte Person.
-- Das Admin-Dashboard listet nur Personen mit Admin-Assistenz und nie das
-  eigene Profil.
-- Wird eine HA-Person entfernt, bleiben Profil und Historie erhalten; ihre
-  Medikamente werden archiviert.
-- Eine später neu angelegte Person wird über **Eintrag hinzufügen** im
-  Pill★Pal-Integrationseintrag aufgenommen.
+- There is exactly one main integration entry and one subentry along with a logical device for each onboarded person.
+- Every write call to the backend requires a `person_id`. There is no globally selected profile.
+- A logged-in user exclusively sees their linked person.
+- The Admin Dashboard only lists people with admin assistance enabled and never the admin's own profile.
+- If an HA person is removed, their profile and history are preserved; their medications are archived.
+- A person created later can be added via **Add Entry** in the Pill★Pal integration entry.
 
-## Datensicherheit und Reparatur
+## Data Security and Repair
 
-Pill★Pal validiert Einstellungen und gespeicherte Profil-, Medikamenten-,
-Zyklus- und Slotdaten vor ihrer Verwendung. Wird beim Start ein beschädigter
-oder nur teilweise migrierter Store erkannt, speichert die Integration dessen
-unveränderten Inhalt zuerst separat unter einer Quarantäne-ID. Nur wenn dieses
-Backup gelingt, wird ein kontrolliert reparierter Stand als Live-Store
-gespeichert. Dashboard und personenbezogener Log weisen anschließend auf die
-Quarantäne hin. Unterstützte ältere Schemas erhalten dabei einen dokumentierten
-Migrationszeitpunkt. Ein neueres, von dieser Version nicht unterstütztes Schema
-wird zwar quarantänisiert, aber weder heruntergestuft noch überschrieben.
-Unbekannte Store-, Profil-, Medikamenten- und Laufzeitfelder werden nicht still
-übernommen.
+Pill★Pal validates settings and stored profile, medication, cycle, and slot data before use. If a corrupted or partially migrated store is detected at startup, the integration first saves its unmodified contents separately under a quarantine ID. Only if this backup succeeds is a controlled, repaired state saved as the live store. The dashboard and person-specific log will subsequently indicate the quarantine. Supported older schemas receive a documented migration timestamp. A newer schema that is not supported by this version will be quarantined, but neither downgraded nor overwritten. Unknown store, profile, medication, and runtime fields are not silently imported.
 
-Das frühere `dashboard_path` und die alten Ausgangshelfer für Fälligkeit und
-Tagesabschluss sind keine aktive Konfiguration mehr. Beim Upgrade auf
-Datenschema 9 werden vorhandene Altwerte kontrolliert entfernt, ohne deshalb
-eine Quarantäne oder einen Konfigurationsfehler auszulösen. Benachrichtigungen
-verwenden den von der Integration registrierten internen Dashboardpfad.
+The former `dashboard_path` and old output helpers for due status and daily completion are no longer active configuration. Upgrading to data schema 9 cleanly removes existing legacy values without triggering a quarantine or configuration error. Notifications use the internal dashboard path registered by the integration.
 
-Ein vorübergehend fehlender oder unvollständiger Home-Assistant-Personen-State
-löscht weder Profil noch Benutzerlink; vollständige Folgeevents aktualisieren
-Name und Verknüpfung. Listener und Hintergrundaufgaben sind an den jeweiligen
-Ladezyklus gebunden, sodass alte Callbacks nach Reload oder Shutdown keine
-Änderungen mehr ausführen.
+A temporarily missing or incomplete Home Assistant person state deletes neither the profile nor the user link; complete subsequent events update the name and link. Listeners and background tasks are bound to their respective load cycle, ensuring that old callbacks execute no further changes after a reload or shutdown.
 
-Der Diagnoseexport enthält grundsätzlich nur Struktur-, Anzahl-,
-Status- und Konfiguriert-ja/nein-Angaben: Personen-, Medikamenten-, Entitäts-,
-Nachrichten-, Log-, Token- und Quarantäneprofilinhalte werden nicht ausgegeben.
+The diagnostic export contains strictly structural, count, status, and configured-yes/no information: profile content for people, medications, entities, messages, logs, tokens, and quarantine is not exported.
 
-Schreibvorgänge werden revisionsbasiert in fester Reihenfolge ausgeführt. Eine
-Dashboard- oder Dienstaktion zeigt deshalb erst nach erfolgreichem dauerhaftem
-Speichern Erfolg an. Scheitert der Commit, erscheint eine Fehlermeldung und die
-noch nicht bestätigte Änderung wird im Arbeitsspeicher zurückgerollt.
+Write operations are executed in a fixed revision-based sequence. Dashboard or service actions therefore only report success after successful persistent storage. If the commit fails, an error message is displayed and the unconfirmed change is rolled back in memory.
 
-### Backup, Wiederherstellung und vollständiges Entfernen
+### Backup, Restore, and Complete Removal
 
-Die maßgebliche Sicherung ist ein vollständiges Home-Assistant-Backup. Vor
-Upgrade, Rückkehr zu einer älteren Pill★Pal-Version oder dem Entfernen der
-Integration sollte ein solches Backup erstellt und dessen Wiederherstellbarkeit
-geprüft werden. Ein Reload oder vorübergehendes Deaktivieren der Integration
-behält alle Fachdaten. Das bestätigte **Entfernen des gesamten Pill★Pal-
-Integrationseintrags** löscht dagegen dessen Live-Store und
-Quarantänespeicher dauerhaft; eine Wiederherstellung ist danach nur aus einem
-vorherigen Home-Assistant-Backup möglich. Das Entfernen nur einer
-Personen-Subentry archiviert deren Fachdaten weiterhin und ist keine
-Vollöschung. Vor der Archivierung beziehungsweise Vollöschung bereinigt
-Pill★Pal alle bekannten profilbezogenen Handyhinweise. Ist ein gespeicherter
-Notify-Dienst beim Entfernen einer Person nicht verfügbar, bleibt der exakte
-Löschauftrag erhalten und wird nach Rückkehr des Dienstes erneut versucht.
+The authoritative backup is a full Home Assistant backup. Before upgrading, rolling back to an older Pill★Pal version, or removing the integration, such a backup should be created and tested for restorability. Reloading or temporarily disabling the integration retains all application data. In contrast, confirming the **removal of the entire Pill★Pal integration entry** permanently deletes its live store and quarantine storage; recovery is then only possible from a previous Home Assistant backup. Removing only a person subentry continues to archive their application data and is not a complete deletion. Prior to archiving or full deletion, Pill★Pal cleans up all known profile-related mobile notifications. If a saved notify service is unavailable when a person is removed, the exact deletion job is preserved and retried once the service returns.
 
-## Automationsentitäten und Aktionen
+## Automation Entities and Actions
 
-Je Person werden unter anderem Fälligkeit, nächste Einnahme, Einnahmetreue,
-Nachbestellungen sowie Buttons zum Bestätigen, Zurückstellen und Überspringen
-angelegt. Zusätzlich stehen Dienste unter `pillpal.*` bereit. Dienste erwarten
-immer eine `person_id`; damit bleiben auch Automationen eindeutig.
+For each person, entities such as due status, next intake, adherence, reorders, and buttons for confirming, snoozing, and skipping are created. Additionally, services are available under `pillpal.*`. Services always expect a `person_id`, keeping automations unambiguous.
 
-`pillpal.adjust_stock` korrigiert den Bestand eines Medikaments relativ. Das
-Delta muss ungleich null, höchstens ±10000 und ein Vielfaches der hinterlegten
-kleinsten Teilung sein. Eine zu große negative Korrektur wird nachvollziehbar
-auf Bestand 0 begrenzt. Ereignis, Log und Action-Ergebnis enthalten angeforderte
-und tatsächlich angewandte Änderung; Erfolg wird erst nach dauerhaftem Speichern
-zurückgegeben.
+`pillpal.adjust_stock` adjusts a medication's stock relatively. The delta must be non-zero, at most ±10,000, and a multiple of the specified minimum step size. An overly large negative correction is capped at 0 stock in a traceable manner. Event, log, and action results contain both requested and actually applied changes; success is returned only after persistent saving.
 
-## Medikamentenpflege und Taster
+## Medication Management and Buttons
 
-Die kleinste Teilung gilt serverseitig für Bestand, Packungsgröße, reguläre
-Dosen, Höchstdosen, Auffüllung, Bedarfsbuchung, Bestandskorrektur und Menge je
-Tastendruck. Der Bedarfsdialog verwendet ausschließlich Plus-/Minus-Schritte;
-„Halb“ mit 0,5 je Tastendruck bleibt ausdrücklich unterstützt.
+The minimum step size applies server-side to stock, package size, regular doses, maximum doses, refills, PRN (as-needed) logging, stock correction, and the amount per button press. The PRN dialog uses plus/minus steps exclusively; "Half" at 0.5 per button press remains explicitly supported.
 
-Ein MHD kann vom Vorjahr bis fünf Jahre nach dem aktuellen Jahr eingetragen
-werden. Das Datumsfeld ist nur bei aktivierter MHD-Prüfung sichtbar. Archivierte
-Medikamente erscheinen in der Pflegeauswahl ausschließlich bei aktivem
-Archivfilter; ein zukünftiger offener Slot wird nach Reaktivierung wieder
-hergestellt, während bereits vergangene Dosen weiterhin nicht nachträglich
-erzeugt werden.
+An expiration date can be entered from the previous year up to five years after the current year. The date field is visible only when expiration checking is enabled. Archived medications appear in the management selection only when the archive filter is active; a future open slot is restored after reactivation, whereas doses already in the past continue not to be retroactively created.
 
-Ein medikamentenspezifischer Input-Button bestätigt bei einem regulär und bei
-Bedarf verwendbaren Medikament zuerst den passenden regulären Slot. Nur reine
-Bedarfsmedikamente werden damit als Bedarf gebucht. Attributänderungen und
-doppelt zugestellte identische Button-Ereignisse lösen keine Buchung aus. Eine
-abgelehnte Betätigung wird geloggt und kurz mit Grund sowie der nächsten
-regulären Einnahme am Handy angezeigt.
+A medication-specific input button confirms the matching regular slot first for a medication usable both regularly and PRN. Only pure PRN medications are logged as PRN via this button. Attribute changes and duplicate identical button events do not trigger a log entry. A rejected press is logged and briefly displayed on the mobile device with the reason and the next regular intake time.
 
-## Benachrichtigungen
+## Notifications
 
-Ein aktuell registrierter Dienst `notify.mobile_app_…` kann unmittelbar als
-Notify-Ziel ausgewählt werden. Pill★Pal aktualisiert diese Auswahl bei späterer
-Registrierung oder Entfernung eines Dienstes. Ein gültiger Notify-Dienst
-**oder** die aktive native personenbezogene Entität **Einnahme fällig** reicht
-als Erinnerungsweg aus. Eine Warnung erscheint nur, wenn bei regelmäßiger
-Medikation beide Wege fehlen; Dashboard, Entität und Log verwenden dafür
-dieselbe Entscheidung.
+A currently registered `notify.mobile_app_…` service can be selected directly as a notification target. Pill★Pal updates this selection upon later registration or removal of a service. A valid notify service **or** the active native person-specific entity **Intake Due** suffices as a reminder channel. A warning appears only if both channels are missing for regular medication; dashboard, entity, and log use the exact same logic.
 
-Die kritische Erinnerung verwendet wieder die Alarmstandardwerte von R4.0.17
-und listet jedes Medikament mit Bullet Point in eigener Zeile. Erfolgreiche
-Helfer-/Buttonbuchungen erhalten zehn Sekunden lang ein nicht alarmierendes
-Handyfeedback. Ergebnis- und Ablehnungsmeldungen nach einer Companion-Action
-haben keine erzwungene kurze Laufzeit. Eine Buchung direkt im persönlichen oder
-administrativen Dashboard bereinigt zwar den Alarm, erzeugt aber bewusst keine
-zusätzliche Handybestätigung.
+Critical reminders use the alarm default values from R4.0.17 again and list each medication with a bullet point on its own line. Successful helper/button loggings receive a non-alarming 10-second mobile confirmation. Result and rejection messages after a companion action do not have a forced short display duration. Logging directly within the personal or administrative dashboard clears the alarm, but intentionally produces no additional mobile confirmation.
 
-Nach `TAKE` oder `SKIP` über eine Companion-Action nennt die Rückmeldung den
-nächsten offenen Einnahmeslot oder den vollständigen Tages-Zyklus. Ist ein
-Folgeslot schon fällig, stehen dessen neu gebundene Aktionen direkt in dieser
-Rückmeldung bereit. `SKIP` bestätigt zusätzlich, dass der Bestand unverändert
-blieb. Beim automatischen Übergang zu „Verpasst“ beendet Pill★Pal die
-Wiederholung und löscht die exakte alte Slotbenachrichtigung.
+After `TAKE` or `SKIP` via a companion action, the feedback response states the next open intake slot or the complete daily cycle. If a subsequent slot is already due, its newly bound actions are directly available within this response. `SKIP` additionally confirms that stock remained unchanged. Upon automatically transitioning to "Missed", Pill★Pal stops repeating and clears the exact old slot notification.
 
-Kann dieses Feedback nach dem bereits erfolgreichen Fachcommit vorübergehend
-nicht zugestellt werden, bleibt die Action dennoch erfolgreich. Pill★Pal
-speichert ausschließlich den fehlenden Feedback-Seiteneffekt und versucht ihn
-später erneut, auch über einen Zykluswechsel hinweg. Die Einnahmeaktion selbst
-wird dabei nie wiederholt. Versandzeit, Wiederholungsanker und sichtbarer
-Erfolgslog einer Erinnerung werden erst nach bestätigtem Notify-Aufruf gesetzt.
+If this feedback temporarily cannot be delivered after a successful application commit, the action still remains successful. Pill★Pal stores only the missing feedback side-effect and retries it later, even across a cycle change. The intake action itself is never repeated. Sent time, retry anchor, and the visible success log of a reminder are set only after a confirmed notify call.
 
-Die Aktionskennung ist nicht nur an Person, Zyklus und Slot, sondern mit einem
-opaken Einmaltoken auch an das konkrete Notify-Gerät gebunden. Nach einem
-Zielwechsel werden Actions aus alten oder kopierten Benachrichtigungen
-verständlich abgelehnt, ohne Einnahmestatus oder Bestand zu verändern.
-Nach SNOOZE bleiben TAKE, SNOOZE und SKIP in der dauerhaften, nicht alarmierenden
-Rückmeldung verfügbar. Erneutes SNOOZE verlängert die bereits bestehende
-Endzeit und bindet alle Actions an einen neuen Einmaltoken.
+The action identifier is bound not only to person, cycle, and slot, but also to the specific notify device using an opaque single-use token. After a target change, actions from old or copied notifications are clearly rejected without altering intake status or stock. After `SNOOZE`, `TAKE`, `SNOOZE`, and `SKIP` remain available in the persistent, non-alarming notification response. Re-snoozing extends the existing end time and binds all actions to a new single-use token.
 
-Ändert sich ein noch offener Medikamenten- oder Zeitplan, entfernt Pill★Pal
-eine bereits sichtbare alte Erinnerung vor dem Neuversand und rotiert deren
-Action-Token. Explizites Snooze akzeptiert nur einen tatsächlich fälligen oder
-bereits zurückgestellten Slot aus dem aktuellen Zyklus. Ein wiederholtes
-gültiges TAKE bleibt ohne zweite Bestandsbuchung, versucht aber erneut die alte
-Benachrichtigung zu bereinigen. Ein vorübergehend fehlender Notify-Dienst
-verbraucht keinen Erinnerungstermin und wird nach Registrierung sofort erneut
-angesprochen. Auch direkt nach Start oder Reload wird der vollständige
-Benachrichtigungszustand einmal abgeglichen; ein im alten Prozess nur
-reservierter Versand gilt dabei nicht fälschlich als zugestellt.
+If an open medication schedule or time plan changes, Pill★Pal removes an already visible old reminder before resending and rotates its action tokens. Explicit snooze accepts only an actually due or already snoozed slot from the current cycle. A repeated valid `TAKE` executes without a second stock deduction, but retries clearing the old notification. A temporarily missing notify service does not consume a reminder slot and is addressed immediately upon re-registration. The complete notification state is also reconciled once directly after startup or reload; a delivery merely reserved in the old process is not falsely considered delivered.
 
-Bei einem tatsächlichen Wechsel des Notify-Ziels bereinigt Pill★Pal den alten
-Endpunkt best-effort und veröffentlicht noch aktive Einnahme-, Bestands- und
-MHD-Hinweise am neuen Ziel. Bestandsmeldungen werden erst nach erfolgreichem
-Versand als zugestellt gespeichert und reagieren auf sämtliche sichtbaren
-Detailänderungen.
+Upon an actual change of the notify target, Pill★Pal clears the old endpoint best-effort and publishes still-active intake, stock, and expiration notices to the new target. Stock alerts are saved as delivered only after successful transmission and react to any visible detail changes.
 
-Nachbestell- und MHD-Hinweise haben eigene, personenbezogene Titel. Ein einziges
-gemeinsames Symbol gilt für alle Meldungsarten; technische Tags vergibt
-Pill★Pal stabil intern und bietet sie deshalb nicht im Editor an. MHD-Termine
-erscheinen mit deutschem Datum, eigener Zeile je Medikament und Angabe, ob das
-Präparat heute, in wie vielen Tagen oder seit wie vielen Tagen abgelaufen ist.
+Reorder and expiration notices have distinct, person-specific titles. A single shared icon applies to all message types; Pill★Pal assigns technical tags stably internally and therefore does not offer them in the editor. Expiration dates appear with localized dates, a dedicated line per medication, and an indication of whether the preparation expires today, in how many days, or expired how many days ago.
 
-## Nachbestellung, MHD und Praxisplanung
+## Reordering, Expiration, and Medical Practice Planning
 
-Für jedes aktive regelmäßige Medikament berechnet Pill★Pal aus Bestand und
-Tagesdosis das voraussichtliche Leer-Datum. Daraus entstehen der normale und der
-wirksame Bestelltag. Liegt der normale Termin in einem zusammenhängenden Block
-aus Wochenende, Feiertag oder hinterlegter Praxisschließung, wird geprüft, ob
-danach noch genügend echte Öffnungstage bis zum Leerstand verbleiben; andernfalls
-wird die Erinnerung um die eingestellte Zahl offener Praxistage vorgezogen.
+For each active regular medication, Pill★Pal calculates the expected depletion date from current stock and daily dosage. This generates the standard order date and the effective order date. If the standard date falls within a contiguous block of weekends, public holidays, or stored practice closures, Pill★Pal checks whether enough actual opening days remain before depletion; otherwise, the reminder is advanced by the configured number of open practice days.
 
-Das Mitbestellfenster ergänzt weitere Präparate, deren Leerstand kurz nach einem
-bereits fälligen Medikament liegt. Der Bestellvorschlag enthält Packungsgrößen,
-Kosten beziehungsweise Zuzahlungen, einen kopierbaren Bestelltext und einen
-Hinweis, wenn Kosten nicht vollständig gepflegt sind. Dieselben Daten stehen als
-maschinenlesbare Attribute der personenbezogenen Entität **Nachbestellungen**
-und im Dashboard bereit.
+The joint reorder window includes additional preparations whose depletion occurs shortly after an already due medication. The reorder suggestion contains package sizes, costs/copayments, a copyable order text, and a warning if costs are incomplete. The same data is available as machine-readable attributes on the person-specific **Reorders** entity and within the dashboard.
 
-Ein verbundener Feiertagskalender wird einmal täglich sowie unmittelbar nach
-Auswahl- oder Zustandsänderungen über `calendar.get_events` vorausgelesen. Ein
-vorübergehend noch nicht synchronisierter Kalender wird automatisch erneut
-abgerufen, ohne dabei einen Diagnosefehler oder Fehlerhinweis zu erzeugen. Die
-technischen Details erfolgreicher Abrufe und echter Fehler stehen im Log,
-während die Praxis-Seite nur den kompakten Status und beliebig viele laufende
-oder zukünftige Schließzeiträume zeigt; beendete Zeiträume werden nicht mehr
-angezeigt oder berechnet.
+A connected holiday calendar is read ahead once daily as well as immediately following selection or state changes via `calendar.get_events`. A temporarily unsynchronized calendar is automatically fetched again without generating a diagnostic error or user warning. Technical details of successful fetches and real errors appear in the log, while the Practice page displays only compact status along with active or future closure periods; past periods are no longer displayed or calculated.
 
-## Statistik, Historie und Diagnoselog
+## Statistics, History, and Diagnostic Log
 
-Beim Start eines Tages-Zyklus speichert Pill★Pal für jeden tatsächlich
-geplanten Slot einen fachlichen Snapshot mit Zyklus, Sollzeit, Medikament,
-Menge und damaliger Einheit. Offene Statusänderungen werden bis zum Abschluss
-nachgeführt; abgeschlossene historische Slots werden durch spätere Änderungen
-an Plan, Name oder Einheit nicht umgeschrieben. Ältere Daten ohne solchen
-Snapshot werden ausschließlich aus ihren damaligen terminalen Ereignissen
-ergänzt, nie aus dem heutigen Medikamentenplan.
+At the start of a daily cycle, Pill★Pal stores a domain snapshot for every scheduled slot containing cycle, target time, medication, amount, and unit at that time. Pending status changes are updated until completion; completed historical slots are not rewritten by subsequent changes to schedule, name, or unit. Older data lacking such a snapshot is supplemented exclusively from its terminal events at that time, never from today's medication plan.
 
-Dashboard, native Statistikentitäten, `pillpal.statistics` und der read-only
-Statistik-WebSocket verwenden dieselbe Modellberechnung. Zeitraum,
-benutzerdefiniertes Von/Bis, Medikament, Einnahmezeit und ausgewählter Tag
-filtern Kennzahlen, Heatmap und Tagesliste gemeinsam. Neben geplant,
-eingenommen, übersprungen und verpasst wird auch ausstehend ausgewiesen;
-Bedarf zeigt Buchungszahl und Gesamtmenge separat.
+Dashboard, native statistic entities, `pillpal.statistics`, and the read-only statistics WebSocket use the same model calculation. Timeframe, custom From/To dates, medication, intake time, and selected day filter metrics, heatmap, and daily list together. In addition to planned, taken, skipped, and missed, pending intakes are also reported; PRN shows log count and total amount separately.
 
-Der personenbezogene Diagnoselog enthält alle Ereignisse der letzten echten 48
-Stunden ohne 500-Einträge-Kappung. Änderungen an Medikamenten und Einstellungen
-nennen verständlich Feld, Alt- und Neuwert. Abgelehnte Actions, technische
-Fehler und ungefangene Fehler eigentümergebundener Hintergrundaufgaben werden
-zusätzlich zum Home-Assistant-Systemlog beim richtigen Pill★Pal-Profil sichtbar.
+The person-specific diagnostic log contains all events from the last rolling 48 hours without a 500-entry cap. Changes to medications and settings state field, old value, and new value clearly. Rejected actions, technical errors, and uncaught errors from owner-bound background tasks are made visible in the appropriate Pill★Pal profile in addition to the Home Assistant system log.
 
-## Native Entitäten und Actions
+## Native Entities and Actions
 
-Jedes Personenprofil stellt neben Fälligkeit und nächster Einnahme vier stabile
-Slot-Sensoren für morgens, mittags, abends und zur Nacht bereit. Zyklus-ID und
--datum, Fälligkeits-, Buchbarkeits-, Snooze- und Abschlusszeit sowie
-Medikamente, Mengen und Einheiten stammen in allen Entitäten aus demselben
-Profilzustand. Eine eigene Praxisstatus-Entität nennt Grund und nächsten
-Öffnungstag. Die Einnahmetreue-Entität enthält einen 30-Tage-Verlauf mit
-Heatmap und Tagesdetails; geplante, eingenommene, übersprungene, verpasste und
-Bedarfseinnahmen stehen zusätzlich als getrennte Zähler bereit.
+Each person profile provides four stable slot sensors for morning, noon, evening, and night alongside due status and next intake. Cycle ID and date, due time, loggability, snooze time, completion time, as well as medications, amounts, and units stem from the same profile state across all entities. A dedicated practice status entity details the reason and next open day. The adherence entity contains a 30-day history with a heatmap and daily details; planned, taken, skipped, missed, and PRN intakes are additionally provided as separate counters.
 
-Öffentliche Actions wählen das Pill★Pal-Personenprofil als Gerät und zeigen die
-vier Einnahmezeiten deutsch beschriftet an. Medikamenten-Actions akzeptieren
-einen eindeutigen sichtbaren Medikamentennamen; technische IDs bleiben für
-bestehende Automationen kompatibel. Jede Action kann ein maschinenlesbares
-Ergebnis zurückgeben und aktualisiert zusätzlich die personenbezogene Entität
-**Aktionsrückmeldung** sowie das Ereignis `pillpal_action_result` mit
-`pending`, `success` oder `error`. Einmaltokens werden nie in der Entität oder
-im Ereignis veröffentlicht.
+Public actions select the Pill★Pal person profile as a device and display the four intake times with localized labels. Medication actions accept a unique visible medication name; technical IDs remain compatible for existing automations. Every action can return a machine-readable result and additionally updates the person-specific **Action Result** entity as well as the `pillpal_action_result` event with `pending`, `success`, or `error`. Single-use tokens are never published in the entity or event.
 
-`pillpal.statistics` liefert frei filterbare Zeiträume, Medikamente,
-Einnahmezeiten, Heatmap und Tagesdetails als Action-Antwort.
-`pillpal.recalculate` erzwingt eine personenbezogene Neuberechnung und versucht
-fehlgeschlagene Einnahmekalender-Ausgaben erneut. Ist ein Einnahmekalender
-gewählt, erzeugen bestätigte, übersprungene, automatisch verpasste und
-Bedarfseinnahmen genau einen strukturierten Kalendereintrag mit Medikamenten in
-einzelnen Bullet-Zeilen. Beim Entfernen einer Personen-Subentry werden nur deren
-Entitäts- und Geräteregistrierungseinträge bereinigt; die archivierten
-Pill★Pal-Fachdaten bleiben erhalten.
+`pillpal.statistics` supplies freely filterable timeframes, medications, intake times, heatmaps, and daily details as an action response. `pillpal.recalculate` forces a person-specific recalculation and retries failed intake calendar outputs. If an intake calendar is configured, confirmed, skipped, automatically missed, and PRN intakes generate exactly one structured calendar entry with medications in individual bullet points. Removing a person subentry cleans up only its entity and device registration entries; archived Pill★Pal application data is retained.
 
-## R4.1-Daten
+## R4.1 Data
 
-R4.1 und R5 dürfen nicht gleichzeitig Einnahmen verarbeiten. Wegen der in den
-Testständen beobachteten Profilvermischungen gibt es keinen stillen Import. Der
-Dienst `pillpal.import_r410` heißt sichtbar **R4.1-Medikamente kontrolliert
-importieren** und verlangt eine kontrollierte JSON-Datei sowie eine explizite
-Zuordnung alter Profil-IDs zu neuen Personen-IDs. Er übernimmt ausschließlich
-Medikamente. Einstellungen, Schnittstellen, Tages-Zyklen, Buchungen, Statistik
-und Log werden bewusst nicht importiert.
+R4.1 and R5 must not process intakes simultaneously. Due to profile mixing observed during testing, there is no silent import. The service `pillpal.import_r410` is visibly named **Controlled Import of R4.1 Medications** and requires a validated JSON file alongside an explicit mapping of old profile IDs to new person IDs. It imports medications exclusively. Settings, interfaces, daily cycles, loggings, statistics, and logs are intentionally not imported.
 
-## Beta-Hinweis
+## Beta Notice
 
-Diese Fassung enthält die neue Architektur und die erste vollständige
-Bedienoberfläche. Vor einem Alltagseinsatz sollte sie auf einer Testinstanz mit
-realistischen Personen-, Benachrichtigungs- und Automationskonfigurationen
-geprüft werden. Medikamentenentscheidungen dürfen nicht ausschließlich von
-Home Assistant abhängig gemacht werden.
+This release contains the new architecture and the first complete user interface. Prior to daily production use, it should be tested on a test instance with realistic person, notification, and automation configurations. Medication decisions must not rely exclusively on Home Assistant.
 
-Quellstand und Installationspaket werden mit `tools/release_package.py`
-bytegenau abgeglichen. Die vollständige automatisierte und reale Prüffolge
-steht in `RELEASE_CHECKLIST.md`; bewusste Abweichungen von R4 sind in
-`CHANGE_SCOPE.md` dokumentiert.
-
+Source code and installation package are byte-matched using `tools/release_package.py`. The complete automated and physical verification sequence is detailed in `RELEASE_CHECKLIST.md`; intentional deviations from R4 are documented in `CHANGE_SCOPE.md`.
