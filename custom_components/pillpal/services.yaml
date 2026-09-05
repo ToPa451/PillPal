@@ -1,0 +1,139 @@
+confirm_slot:
+  name: Einnahme bestätigen
+  description: Bestätigt eine fällige regelmäßige Einnahme für genau eine Person.
+  fields:
+    person_id:
+      name: Personenprofil
+      required: true
+      selector: {device: {filter: [{integration: pillpal}]}}
+    slot:
+      name: Einnahmezeit
+      selector:
+        select:
+          options:
+            - {label: Morgens, value: morning}
+            - {label: Mittags, value: noon}
+            - {label: Abends, value: evening}
+            - {label: Zur Nacht, value: night}
+    allow_early:
+      name: Vorzeitige Bestätigung zulassen
+      selector: {boolean: {}}
+snooze_slot:
+  name: Einnahme zurückstellen
+  description: Stellt eine fällige Einnahme einer Person zurück.
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+    slot:
+      name: Einnahmezeit
+      selector:
+        select:
+          options:
+            - {label: Morgens, value: morning}
+            - {label: Mittags, value: noon}
+            - {label: Abends, value: evening}
+            - {label: Zur Nacht, value: night}
+    minutes: {name: Minuten, selector: {number: {min: 1, max: 240, mode: box}}}
+skip_slot:
+  name: Einnahme überspringen
+  description: Überspringt eine fällige Einnahme ohne Bestandsänderung.
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+    slot:
+      name: Einnahmezeit
+      selector:
+        select:
+          options:
+            - {label: Morgens, value: morning}
+            - {label: Mittags, value: noon}
+            - {label: Abends, value: evening}
+            - {label: Zur Nacht, value: night}
+book_as_needed:
+  name: Bedarfseinnahme buchen
+  description: Bucht eine Bedarfseinnahme mit Bestands-, Maximaldosis- und Schrittweitenprüfung.
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+    medication_id: {name: Medikament (eindeutiger Name), required: true, selector: {text: {}}}
+    quantity: {name: Menge, required: true, selector: {number: {min: 0, max: 1000, step: 0.1, mode: box}}}
+    confirmation_token:
+      name: Bestätigungstoken für Höchstdosis-Ausnahme
+      description: Nur für den ausdrücklich bestätigten zweiten Aufruf mit dem kurzlebigen Token aus dem ersten Ergebnis.
+      selector: {text: {}}
+save_medication:
+  name: Medikament speichern
+  description: Legt ein Medikament im Profil einer Person an oder aktualisiert es.
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+    medication: {name: Medikament, required: true, selector: {object: {}}}
+archive_medication:
+  name: Medikament archivieren
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+    medication_id: {name: Medikament (eindeutiger Name), required: true, selector: {text: {}}}
+reactivate_medication:
+  name: Medikament reaktivieren
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+    medication_id: {name: Medikament (eindeutiger Name), required: true, selector: {text: {}}}
+refill:
+  name: Bestand auffüllen
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+    medication_id: {name: Medikament (eindeutiger Name), required: true, selector: {text: {}}}
+    quantity: {name: Menge, selector: {number: {min: 0, max: 100000, step: 0.1, mode: box}}}
+    expiry_date: {name: Mindesthaltbarkeitsdatum, selector: {date: {}}}
+adjust_stock:
+  name: Medikamentenbestand relativ korrigieren
+  description: Ändert den Bestand eines Medikaments für genau eine Person um einen positiven oder negativen Wert; die kleinste Teilung des Medikaments wird im Backend geprüft.
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+    medication_id: {name: Medikament (eindeutiger Name), required: true, selector: {text: {}}}
+    delta: {name: Relative Änderung, required: true, selector: {number: {min: -10000, max: 10000, step: 0.25, mode: box}}}
+update_settings:
+  name: Einstellungen speichern
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+    settings: {name: Einstellungen, required: true, selector: {object: {}}}
+update_practice_closures:
+  name: Praxisschließzeiten aktualisieren
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+    closures: {name: Schließzeiten, required: true, selector: {object: {}}}
+acknowledge_errors:
+  name: Fehlerhinweise als gelesen markieren
+  description: Markiert die aktuellen Diagnosefehler einer Person als gelesen.
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+
+recalculate:
+  name: Pill★Pal neu berechnen
+  description: Berechnet Zeitplan, Praxis-, Bestands- und Kalenderausgaben für genau eine Person neu und versucht fehlgeschlagene Kalenderausgaben erneut.
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+
+statistics:
+  name: Statistik auswerten
+  description: Liefert personenbezogene Summen, Tagesdetails und Heatmap mit frei kombinierbaren Filtern als Action-Antwort.
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+    days: {name: Zeitraum in Tagen, selector: {number: {min: 1, max: 3660, mode: box}}}
+    medication_id: {name: Medikament (eindeutiger Name), selector: {text: {}}}
+    slot:
+      name: Einnahmezeit
+      selector:
+        select:
+          options:
+            - {label: Alle Einnahmezeiten, value: ""}
+            - {label: Morgens, value: morning}
+            - {label: Mittags, value: noon}
+            - {label: Abends, value: evening}
+            - {label: Zur Nacht, value: night}
+            - {label: Bedarf, value: as_needed}
+    start_date: {name: Startdatum, selector: {date: {}}}
+    end_date: {name: Enddatum, selector: {date: {}}}
+    selected_day: {name: Detailtag, selector: {date: {}}}
+import_r410:
+  name: R4.1-Medikamente kontrolliert importieren
+  description: Importiert ausschließlich Medikamente mit einer expliziten Zuordnung alter Profile zu neuen Personen-IDs; Einstellungen, Zyklen, Buchungen, Statistik und Log werden nicht übernommen.
+  fields:
+    source_path: {name: JSON-Datei, required: true, selector: {text: {}}}
+    mapping: {name: Zuordnung, required: true, selector: {object: {}}}
