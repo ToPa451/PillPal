@@ -1,6 +1,16 @@
-# Pill★Pal R5.1.0 Development State 1
+## Pill★Pal
 
-Pill★Pal R5 is a true Home Assistant custom integration. It replaces the global Pyscript/helper toggling from R4.1 with permanently separated person profiles, unique entities, and explicitly person-specific actions.
+Pill★Pal is a Home Assistant–based medication manager that goes beyond a simple alarm or calendar reminder. It actively supports the entire medication routine—from scheduled reminders to confirmation and documentation.
+
+- User-based management with individual medication plans, schedules, and notifications
+- Flexible schedules and dosage plans for multiple medications
+- Actionable notifications to mark doses as taken, snooze them, or skip them
+- Automatic tracking of pending, taken, skipped, and missed doses
+- Inventory monitoring with alerts for low stock and approaching expiration dates
+- Timely refill reminders that take medical practice closure periods into account
+- Optional admin-assisted medication intake
+- A central dashboard showing upcoming and past intakes
+- Support for as-needed medication and configurable safety limits
 
 ## Prerequisites
 
