@@ -15,6 +15,23 @@ Pill★Pal is a Home Assistant–based medication manager optimized for mobile s
 - Support for as-needed medication and configurable safety limits
 - Optional admin-assisted medication intake
 
+# Upcoming Features
+
+* **Multi-language Support**  
+  Support for languages other than German  
+
+* **Manage Multiple Doctors**  
+  Manage multiple doctors and assign them to medications for accurate reorder reminders during clinic closures  
+
+* **Edit Dose History**  
+  Correction of taken or skipped doses  
+
+* **Extended Interval Settings**  
+  Support for complex schedules (e.g., "every 2nd Tuesday of the month")  
+
+* **Import / Export**  
+  Import and export functionality
+
 ## Prerequisites
 
 - Home Assistant 2026.8.0 or newer
