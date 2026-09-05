@@ -131,10 +131,6 @@ Public actions select the Pill★Pal person profile as a device and display the 
 
 `pillpal.statistics` supplies freely filterable timeframes, medications, intake times, heatmaps, and daily details as an action response. `pillpal.recalculate` forces a person-specific recalculation and retries failed intake calendar outputs. If an intake calendar is configured, confirmed, skipped, automatically missed, and PRN intakes generate exactly one structured calendar entry with medications in individual bullet points. Removing a person subentry cleans up only its entity and device registration entries; archived Pill★Pal application data is retained.
 
-## R4.1 Data
-
-R4.1 and R5 must not process intakes simultaneously. Due to profile mixing observed during testing, there is no silent import. The service `pillpal.import_r410` is visibly named **Controlled Import of R4.1 Medications** and requires a validated JSON file alongside an explicit mapping of old profile IDs to new person IDs. It imports medications exclusively. Settings, interfaces, daily cycles, loggings, statistics, and logs are intentionally not imported.
-
 ## Beta Notice
 
 This release contains the new architecture and the first complete user interface. Prior to daily production use, it should be tested on a test instance with realistic person, notification, and automation configurations. Medication decisions must not rely exclusively on Home Assistant.
