@@ -18,7 +18,7 @@ Pill★Pal is a Home Assistant–based medication manager optimized for mobile s
 # Upcoming Features
 
 * **Multi-language Support**  
-  Support for languages other than German  
+  Support for languages other than German and English
 
 * **Manage Multiple Doctors**  
   Manage multiple doctors and assign them to medications for accurate reorder reminders during clinic closures  
