@@ -1,0 +1,42 @@
+{
+  "title": "Pill★Pal",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Select people for Pill★Pal",
+        "description": "A completely isolated Pill★Pal profile will be created for every selected Home Assistant Person.",
+        "data": {"included_person_ids": "People to include"}
+      },
+      "assistance": {
+        "title": "Administrator assistance",
+        "description": "People linked to a user remain private unless assistance is explicitly enabled. People without a user are always managed by administrators.",
+        "data": {"assisted_person_ids": "People allowing administrator assistance"}
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Pill★Pal is already configured.",
+      "no_people": "No Home Assistant People exist yet.",
+      "select_at_least_one": "Select at least one person."
+    },
+    "error": {"select_at_least_one": "Select at least one person."}
+  },
+  "options": {
+    "step": {
+      "init": {"title": "Add new people", "data": {"included_person_ids": "New people"}},
+      "assistance": {"title": "Administrator assistance", "data": {"assisted_person_ids": "People allowing administrator assistance"}}
+    },
+    "abort": {"no_new_people": "All existing Home Assistant People are already configured."},
+    "error": {"select_at_least_one": "Select at least one person."}
+  },
+  "config_subentries": {
+    "person": {
+      "title": "Person profile",
+      "step": {
+        "user": {"title": "Add person", "data": {"person_id": "Home Assistant Person"}},
+        "assistance": {"title": "Set assistance", "data": {"admin_assistance": "Allow administrator assistance"}},
+        "reconfigure": {"title": "Configure {person}", "data": {"admin_assistance": "Allow administrator assistance"}}
+      },
+      "abort": {"no_new_people": "All existing Home Assistant People are already configured."}
+    }
+  }
+}

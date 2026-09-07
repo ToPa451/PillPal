@@ -1,0 +1,115 @@
+{
+  "title": "Pill★Pal",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Personen für Pill★Pal auswählen",
+        "description": "Für jede ausgewählte Home-Assistant-Person wird ein vollständig getrenntes Pill★Pal-Profil angelegt.",
+        "data": {
+          "included_person_ids": "Aufzunehmende Personen",
+          "create_example_medication": "Beispielmedikament für neue Profile anlegen"
+        }
+      },
+      "assistance": {
+        "title": "Assistenz durch Administratoren",
+        "description": "Personen mit verknüpftem Benutzer haben alleinigen Zugriff, sofern die Assistenz nicht ausdrücklich aktiviert wird. Personen ohne Benutzer werden immer durch Administratoren betreut.",
+        "data": {"assisted_person_ids": "Personen mit Admin-Assistenz"}
+      },
+      "finish": {
+        "title": "Pill★Pal ist bereit",
+        "description": "Die Dashboards werden automatisch registriert. Ein Home-Assistant-Neustart ist nicht erforderlich. Falls sie in einer bereits geöffneten Sitzung noch fehlen, lade den Browser einmal mit Strg+F5 neu beziehungsweise öffne die Companion-App neu. Adressen: /pillpal und für berechtigte Administratoren /pillpal-admin. Die maßgebliche Sicherung ist ein Home-Assistant-Backup. Das spätere Entfernen des gesamten Integrationseintrags löscht den Pill★Pal-Live- und Quarantänespeicher dauerhaft."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Pill★Pal ist bereits eingerichtet.",
+      "no_people": "In Home Assistant sind noch keine Personen angelegt.",
+      "select_at_least_one": "Mindestens eine Person muss ausgewählt werden."
+    },
+    "error": {
+      "select_at_least_one": "Bitte mindestens eine Person auswählen."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Neue Personen aufnehmen",
+        "description": "Wähle die seit der Ersteinrichtung hinzugekommenen Personen aus.",
+        "data": {
+          "included_person_ids": "Neue Personen"
+        }
+      },
+      "assistance": {
+        "title": "Assistenz durch Administratoren",
+        "description": "Aktiviere die Assistenz nur für verknüpfte Benutzer, deren Profil auch im Admin-Dashboard verfügbar sein soll.",
+        "data": {"assisted_person_ids": "Personen mit Admin-Assistenz"}
+      }
+    },
+    "abort": {
+      "no_new_people": "Alle vorhandenen Home-Assistant-Personen wurden bereits eingerichtet."
+    },
+    "error": {
+      "select_at_least_one": "Bitte mindestens eine Person auswählen."
+    }
+  },
+  "config_subentries": {
+    "person": {
+      "title": "Personenprofil",
+      "step": {
+        "user": {
+          "title": "Person hinzufügen",
+          "data": {
+            "person_id": "Home-Assistant-Person"
+          }
+        },
+        "assistance": {
+          "title": "Assistenz festlegen",
+          "data": {
+            "admin_assistance": "Assistenz durch Administratoren zulassen"
+          }
+        },
+        "reconfigure": {
+          "title": "{person} konfigurieren",
+          "description": "Personen ohne verknüpften Benutzer benötigen immer Assistenz.",
+          "data": {
+            "admin_assistance": "Assistenz durch Administratoren zulassen"
+          }
+        }
+      },
+      "abort": {
+        "no_new_people": "Alle vorhandenen Home-Assistant-Personen wurden bereits eingerichtet."
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {"name": "Status"},
+      "next_intake": {"name": "Nächste Einnahme"},
+      "slot_morning": {"name": "Einnahme morgens", "state": {"not_planned": "Nicht geplant", "planned": "Geplant", "pending": "Ausstehend", "notified": "Benachrichtigt", "snoozed": "Zurückgestellt", "taken": "Eingenommen", "skipped": "Übersprungen", "missed": "Verpasst"}},
+      "slot_noon": {"name": "Einnahme mittags", "state": {"not_planned": "Nicht geplant", "planned": "Geplant", "pending": "Ausstehend", "notified": "Benachrichtigt", "snoozed": "Zurückgestellt", "taken": "Eingenommen", "skipped": "Übersprungen", "missed": "Verpasst"}},
+      "slot_evening": {"name": "Einnahme abends", "state": {"not_planned": "Nicht geplant", "planned": "Geplant", "pending": "Ausstehend", "notified": "Benachrichtigt", "snoozed": "Zurückgestellt", "taken": "Eingenommen", "skipped": "Übersprungen", "missed": "Verpasst"}},
+      "slot_night": {"name": "Einnahme zur Nacht", "state": {"not_planned": "Nicht geplant", "planned": "Geplant", "pending": "Ausstehend", "notified": "Benachrichtigt", "snoozed": "Zurückgestellt", "taken": "Eingenommen", "skipped": "Übersprungen", "missed": "Verpasst"}},
+      "practice_status": {"name": "Praxisstatus"},
+      "action_result": {"name": "Letzte Aktionsrückmeldung", "state": {"idle": "Bereit", "pending": "Wird ausgeführt", "success": "Erfolgreich", "error": "Fehlgeschlagen"}},
+      "stock_alerts": {"name": "Nachbestellungen"},
+      "expiry_alerts": {"name": "MHD-Hinweise"},
+      "last_activity": {"name": "Letzte Aktivität"},
+      "adherence": {"name": "Einnahmetreue"},
+      "statistics_planned": {"name": "Geplante Einnahmen"},
+      "statistics_taken": {"name": "Eingenommene Einnahmen"},
+      "statistics_skipped": {"name": "Übersprungene Einnahmen"},
+      "statistics_missed": {"name": "Verpasste Einnahmen"},
+      "statistics_as_needed_bookings": {"name": "Bedarfseinnahmen"}
+    },
+    "binary_sensor": {
+      "intake_due": {"name": "Einnahme fällig"},
+      "intake_possible": {"name": "Einnahme möglich"},
+      "daily_complete": {"name": "Tages-Zyklus vollständig"},
+      "reminder_configured": {"name": "Erinnerungsweg vorhanden"}
+    },
+    "button": {
+      "confirm": {"name": "Fällige Einnahme bestätigen"},
+      "snooze": {"name": "Fällige Einnahme zurückstellen"},
+      "skip": {"name": "Fällige Einnahme überspringen"}
+    }
+  }
+}
