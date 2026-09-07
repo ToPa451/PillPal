@@ -58,6 +58,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await manager.async_shutdown()
     if not hass.data[DOMAIN]["entries"]:
         async_remove_panels(hass)
+    else:
+        # The unloaded entry may have been the last one that enabled the
+        # optional assistance panel.
+        await async_register_panels(hass)
     return True
 
 

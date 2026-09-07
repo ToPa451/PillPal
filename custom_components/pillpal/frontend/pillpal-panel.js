@@ -41,7 +41,7 @@ const PAGE_META = {
   verwalten: ["Medikamente verwalten", "Stammdaten, Dosen, Bestand und Archiv", "banner_verwalten.png", "#d49a21"],
   zeiten: ["Zeiten & Fristen", "Einnahmezeiten, Intervalle und Warnfristen", "banner_zeiten.png", "#ef7d25"],
   benachrichtigungen: ["Benachrichtigungen", "Texte und Verhalten der Erinnerungen", "banner_benachrichtigungen.png", "#9a5eae"],
-  schnittstellen: ["Schnittstellen", "Externe Entitäten für ein- und ausgehende Informationen", "banner_system.png", "#c75f5f"],
+  schnittstellen: ["Schnittstellen", "Externe Entitäten für ein- und ausgehende Informationen", "banner_system.png", "#a86f47"],
   log: ["Log & Info", "Diagnoseereignisse der letzten 48 Stunden und Versions-Info", "banner_log.png", "#6887aa"],
 };
 
@@ -101,7 +101,11 @@ class PillPalPanel extends HTMLElement {
   }
 
   set hass(value) {
+    const previousDarkMode = this._hass?.themes?.darkMode;
     this._hass = value;
+    if (this._data && previousDarkMode !== undefined && previousDarkMode !== value?.themes?.darkMode) {
+      this._render();
+    }
     this._start();
   }
 
@@ -663,7 +667,8 @@ class PillPalPanel extends HTMLElement {
     let text = String(value ?? "");
     text = text.replace(/\b\d{4}-\d{2}-\d{2}\b/g, (date) => dateOnly(date));
     for (const [key, label] of Object.entries({ fallback: "Fallback-Zeiten", helper: "Helfer", notification: "Benachrichtigung", schedule: "Zeitplan", cycle_end: "Zyklusende", dashboard: "Dashboard", ...SLOT_LABELS, ...STATUS_LABELS, ...EVENT_LABELS })) {
-      text = text.replace(new RegExp(`\\b${key}\\b`, "gi"), label);
+      const pattern = key === "fallback" ? `\\b${key}\\b(?!-Zeiten)` : `\\b${key}\\b`;
+      text = text.replace(new RegExp(pattern, "gi"), label);
     }
     return text;
   }
@@ -687,11 +692,11 @@ class PillPalPanel extends HTMLElement {
   }
 
   _renderLoading() {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5100_21/pillpal.css?v=5100-21"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5100_22/pillpal.css?v=5100-22"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
   }
 
   _renderFatal(err) {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5100_21/pillpal.css?v=5100-21"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5100_22/pillpal.css?v=5100-22"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
   }
 
   _render() {
@@ -704,14 +709,14 @@ class PillPalPanel extends HTMLElement {
       const text = this._adminMode
         ? "Es gibt keine Person, deren Profil du als Administrator betreuen darfst."
         : "Dein Home-Assistant-Benutzer ist keiner aufgenommenen Person zugeordnet.";
-      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5100_21/pillpal.css?v=5100-21"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
+      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5100_22/pillpal.css?v=5100-22"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
       return;
     }
     const meta = PAGE_META[this._page];
     this.shadowRoot.innerHTML = `
-      <link rel="stylesheet" href="/pillpal_static_5100_21/pillpal.css?v=5100-21">
+      <link rel="stylesheet" href="/pillpal_static_5100_22/pillpal.css?v=5100-22">
       <style>:host{--accent:${meta[3]}}</style>
-      <main class="app page-${this._page}">
+      <main class="app page-${this._page} ${this.hass?.themes?.darkMode ? "theme-dark" : "theme-light"}">
         <header class="mobile-toolbar"><ha-menu-button></ha-menu-button><strong>Pill★Pal · ${meta[0]}</strong></header>
         <nav>${PAGES.map(([id, icon, label]) => `<button class="nav ${this._page === id ? "active" : ""}" data-page="${id}" title="${label}" aria-label="${label}"><ha-icon icon="${icon}"></ha-icon></button>`).join("")}</nav>
         <div class="content">
@@ -780,7 +785,8 @@ class PillPalPanel extends HTMLElement {
     const terminal = ["taken", "skipped", "missed"].includes(item.status);
     const isDue = !terminal && !isSnoozed && (item.is_due === true || (item.is_due === undefined && mode === "due"));
     const isBookable = !terminal && !isSnoozed && (item.is_bookable === true || (item.is_bookable === undefined && mode === "early"));
-    const buttons = isDue
+    const actionIsDue = isDue || isSnoozed;
+    const buttons = actionIsDue
       ? `<div class="actions compact"><button data-action="confirm" data-slot="${slot}"><ha-icon icon="mdi:check"></ha-icon>Bestätigen</button><button class="secondary" data-action="snooze" data-slot="${slot}" aria-label="Zurückstellen"><ha-icon icon="mdi:alarm-snooze"></ha-icon></button><button class="secondary" data-action="skip" data-slot="${slot}" aria-label="Überspringen"><ha-icon icon="mdi:skip-next"></ha-icon></button></div>`
       : isBookable
         ? `<div class="actions compact"><button data-action="confirm" data-slot="${slot}"><ha-icon icon="mdi:check"></ha-icon>Vorzeitig bestätigen</button><button class="secondary" data-action="skip" data-slot="${slot}" aria-label="Überspringen"><ha-icon icon="mdi:skip-next"></ha-icon>Überspringen</button></div>`
@@ -1007,4 +1013,4 @@ class PillPalPanel extends HTMLElement {
   }
 }
 
-if (!customElements.get("pillpal-panel-5100-21")) customElements.define("pillpal-panel-5100-21", PillPalPanel);
+if (!customElements.get("pillpal-panel-5100-22")) customElements.define("pillpal-panel-5100-22", PillPalPanel);

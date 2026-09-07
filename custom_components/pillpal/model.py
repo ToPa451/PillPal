@@ -3341,8 +3341,9 @@ def snooze_slot(
     until = base + timedelta(minutes=duration)
     slot_data["status"] = "snoozed"
     slot_data["snoozed_until"] = until.isoformat()
-    repeat = max(1, int(profile.get("settings", {}).get("repeat_minutes", 5)))
-    slot_data["next_reminder_at"] = (until + timedelta(minutes=repeat)).isoformat()
+    # The snooze deadline is the next reminder time.  ``repeat_minutes`` only
+    # controls later repetitions after that reminder was actually delivered.
+    slot_data["next_reminder_at"] = until.isoformat()
     slot_data["last_notification_at"] = current.isoformat()
     slot_data["notification_state"] = "cleanup_pending"
     slot_data["notification_reservation_id"] = None

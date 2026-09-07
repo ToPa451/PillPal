@@ -9,8 +9,19 @@ from homeassistant.core import HomeAssistant
 from .const import ADMIN_PANEL_URL, FRONTEND_DIR, PANEL_COMPONENT, PANEL_URL, STATIC_URL
 
 
+def _assistance_panel_configured(hass: HomeAssistant) -> bool:
+    """Return whether any active profile explicitly allows admin assistance."""
+
+    managers = hass.data.get("pillpal", {}).get("entries", {}).values()
+    return any(
+        bool(profile.get("admin_assistance"))
+        for manager in managers
+        for profile in manager.active_profiles
+    )
+
+
 async def async_register_panels(hass: HomeAssistant) -> None:
-    """Register the cache-isolated frontend bundle and current panels."""
+    """Register the cache-isolated frontend bundle and configured panels."""
 
     if hass.data["pillpal"].get("static_url_registered") != STATIC_URL:
         await hass.http.async_register_static_paths(
@@ -28,23 +39,24 @@ async def async_register_panels(hass: HomeAssistant) -> None:
         hass=hass,
         frontend_url_path=PANEL_URL,
         webcomponent_name=PANEL_COMPONENT,
-        module_url=f"{STATIC_URL}/pillpal-panel.js?v=5100-21",
+        module_url=f"{STATIC_URL}/pillpal-panel.js?v=5100-22",
         sidebar_title="Pill★Pal",
         sidebar_icon="mdi:medication-outline",
         embed_iframe=False,
         require_admin=False,
     )
-    await panel_custom.async_register_panel(
-        hass=hass,
-        frontend_url_path=ADMIN_PANEL_URL,
-        webcomponent_name=PANEL_COMPONENT,
-        module_url=f"{STATIC_URL}/pillpal-panel.js?v=5100-21",
-        sidebar_title="Pill★Pal Assistenz",
-        sidebar_icon="mdi:account-supervisor",
-        config={"admin_mode": True},
-        embed_iframe=False,
-        require_admin=True,
-    )
+    if _assistance_panel_configured(hass):
+        await panel_custom.async_register_panel(
+            hass=hass,
+            frontend_url_path=ADMIN_PANEL_URL,
+            webcomponent_name=PANEL_COMPONENT,
+            module_url=f"{STATIC_URL}/pillpal-panel.js?v=5100-22",
+            sidebar_title="Pill★Pal Assistenz",
+            sidebar_icon="mdi:account-supervisor",
+            config={"admin_mode": True},
+            embed_iframe=False,
+            require_admin=True,
+        )
 
 
 def async_remove_panels(hass: HomeAssistant) -> None:
