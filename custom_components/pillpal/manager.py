@@ -691,6 +691,17 @@ class PillPalManager:
                 return profile["person_id"]
         return None
 
+    def _self_service_person_id(self, user_id: str | None) -> str | None:
+        """Resolve the standard-dashboard profile, hiding assisted persons."""
+
+        person_id = self.person_id_for_user(user_id)
+        if person_id is None:
+            return None
+        profile = self.data.get("profiles", {}).get(person_id)
+        if profile is None or bool(profile.get("admin_assistance")):
+            return None
+        return person_id
+
     def manageable_profiles(
         self, user_id: str | None, is_admin: bool
     ) -> list[dict[str, Any]]:
@@ -719,9 +730,8 @@ class PillPalManager:
     ) -> bool:
         """Check access without relying on a global selection."""
 
-        own = self.person_id_for_user(user_id)
         if not admin_mode:
-            return own == person_id
+            return self._self_service_person_id(user_id) == person_id
         return any(
             profile["person_id"] == person_id
             for profile in self.manageable_profiles(user_id, is_admin)
@@ -747,7 +757,8 @@ class PillPalManager:
                 else (allowed[0] if allowed else None)
             )
         else:
-            person_id = own
+            # An assisted person must be managed from the assistance dashboard.
+            person_id = self._self_service_person_id(user_id)
 
         selected = snapshot(self.profile(person_id), dt_util.now()) if person_id else None
         if selected is not None:

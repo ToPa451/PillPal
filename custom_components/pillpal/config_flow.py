@@ -104,7 +104,8 @@ class PillPalConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 for person in self._people
                 if person["person_id"] in self._selected_ids and person["user_id"]
             ]
-            if linked:
+            # With only one Person in HA, nobody else could ever assist them.
+            if linked and len(self._people) > 1:
                 return await self.async_step_assistance()
             return await self.async_step_finish()
         return self.async_show_form(step_id="user", data_schema=self._person_schema())
@@ -189,8 +190,9 @@ class PersonSubentryFlow(ConfigSubentryFlow):
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         entry = self._get_entry()
         configured = {subentry.unique_id for subentry in entry.subentries.values()}
+        all_people = _ha_people(self.hass)
         people = [
-            person for person in _ha_people(self.hass) if person["person_id"] not in configured
+            person for person in all_people if person["person_id"] not in configured
         ]
         if not people:
             return self.async_abort(reason="no_new_people")
@@ -198,7 +200,10 @@ class PersonSubentryFlow(ConfigSubentryFlow):
             person_id = user_input[CONF_PERSON_ID]
             self._person = next(item for item in people if item["person_id"] == person_id)
             if self._person["user_id"]:
-                return await self.async_step_assistance()
+                # With only one Person in HA, nobody else could ever assist them.
+                if len(all_people) > 1:
+                    return await self.async_step_assistance()
+                return self._create_person(False)
             return self._create_person(True)
         return self.async_show_form(
             step_id="user",
@@ -234,24 +239,25 @@ class PersonSubentryFlow(ConfigSubentryFlow):
         self, user_input: dict[str, Any] | None = None
     ):
         subentry = self._get_reconfigure_subentry()
+        all_people = _ha_people(self.hass)
         person = next(
             (
                 item
-                for item in _ha_people(self.hass)
+                for item in all_people
                 if item["person_id"] == subentry.data[CONF_PERSON_ID]
             ),
             None,
         )
-        if user_input is not None:
+        linked_user_id = (
+            person["user_id"]
+            if person is not None
+            else str(subentry.data.get(CONF_USER_ID, ""))
+        )
+        forced = not bool(linked_user_id)
+
+        def _updates(assistance: bool) -> dict[str, Any]:
             updates = dict(subentry.data)
-            linked_user_id = (
-                person["user_id"]
-                if person is not None
-                else str(subentry.data.get(CONF_USER_ID, ""))
-            )
-            updates[CONF_ADMIN_ASSISTANCE] = bool(
-                user_input[CONF_ADMIN_ASSISTANCE] or not linked_user_id
-            )
+            updates[CONF_ADMIN_ASSISTANCE] = bool(assistance or forced)
             if person:
                 updates.update(
                     {
@@ -260,18 +266,24 @@ class PersonSubentryFlow(ConfigSubentryFlow):
                         CONF_USER_ID: person["user_id"],
                     }
                 )
+            return updates
+
+        # With only one Person in HA, nobody else could ever assist them, so
+        # the assistance selection is skipped rather than offered disabled.
+        if not forced and len(all_people) <= 1:
             return self.async_update_and_abort(
                 self._get_entry(),
                 subentry,
-                data=updates,
+                data=_updates(False),
                 title=person["name"] if person else subentry.title,
             )
-        linked_user_id = (
-            person["user_id"]
-            if person is not None
-            else str(subentry.data.get(CONF_USER_ID, ""))
-        )
-        forced = not bool(linked_user_id)
+        if user_input is not None:
+            return self.async_update_and_abort(
+                self._get_entry(),
+                subentry,
+                data=_updates(bool(user_input[CONF_ADMIN_ASSISTANCE])),
+                title=person["name"] if person else subentry.title,
+            )
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=vol.Schema(
