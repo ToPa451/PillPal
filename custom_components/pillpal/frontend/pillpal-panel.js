@@ -33,16 +33,16 @@ const UNIT_OPTIONS = [
   ["Stück", "Stück"], ["Tube", "Tuben"], ["Strang", "Stränge"],
 ];
 const PAGE_META = {
-  overview: ["Übersicht", "Aktueller Status, heutige Einnahmen und Schnellaktionen", "banner_uebersicht.png", "#c65d72"],
-  bedarf: ["Bedarfseinnahme", "Einnahme schnell buchen mit Bestands- und Maximaldosis-Prüfung", "banner_bedarf.png", "#9b63bd"],
-  statistik: ["Statistik", "Personenbezogene Auswertung ohne vermischte Buchungen", "banner_statistik.png", "#378ce0"],
-  bestand: ["Medikamentenplan", "Aktive Präparate, Reichweiten, Bestellungen und MHD", "banner_bestand.png", "#18aab7"],
-  praxis: ["Praxistage", "Status zur Praxisöffnung und zukünftige Schließzeiten", "banner_praxis.png", "#78b94f"],
-  verwalten: ["Medikamente verwalten", "Stammdaten, Dosen, Bestand und Archiv", "banner_verwalten.png", "#d49a21"],
-  zeiten: ["Zeiten & Fristen", "Einnahmezeiten, Intervalle und Warnfristen", "banner_zeiten.png", "#ef7d25"],
-  benachrichtigungen: ["Benachrichtigungen", "Texte und Verhalten der Erinnerungen", "banner_benachrichtigungen.png", "#9a5eae"],
-  schnittstellen: ["Schnittstellen", "Externe Entitäten für ein- und ausgehende Informationen", "banner_system.png", "#a86f47"],
-  log: ["Log & Info", "Diagnoseereignisse der letzten 48 Stunden und Versions-Info", "banner_log.png", "#6887aa"],
+  overview: ["Übersicht", "#c65d72"],
+  bedarf: ["Bedarfseinnahme", "#9b63bd"],
+  statistik: ["Statistik", "#378ce0"],
+  bestand: ["Medikamentenplan", "#18aab7"],
+  praxis: ["Praxistage", "#78b94f"],
+  verwalten: ["Medikamente verwalten", "#d49a21"],
+  zeiten: ["Zeiten & Fristen", "#ef7d25"],
+  benachrichtigungen: ["Benachrichtigungen", "#9a5eae"],
+  schnittstellen: ["Schnittstellen", "#a86f47"],
+  log: ["Log & Info", "#6887aa"],
 };
 
 const esc = (value) => String(value ?? "")
@@ -715,7 +715,7 @@ class PillPalPanel extends HTMLElement {
     const meta = PAGE_META[this._page];
     this.shadowRoot.innerHTML = `
       <link rel="stylesheet" href="/pillpal_static_5100_22/pillpal.css?v=5100-22">
-      <style>:host{--accent:${meta[3]}}</style>
+      <style>:host{--accent:${meta[1]}}</style>
       <main class="app page-${this._page} ${this.hass?.themes?.darkMode ? "theme-dark" : "theme-light"}">
         <header class="mobile-toolbar"><ha-menu-button></ha-menu-button><strong>Pill★Pal · ${meta[0]}</strong></header>
         <nav>${PAGES.map(([id, icon, label]) => `<button class="nav ${this._page === id ? "active" : ""}" data-page="${id}" title="${label}" aria-label="${label}"><ha-icon icon="${icon}"></ha-icon></button>`).join("")}</nav>
