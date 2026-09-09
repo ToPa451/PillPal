@@ -2726,6 +2726,10 @@ class PillPalManager:
         calendar_events: list[tuple[str, dict[str, Any]]] = []
         stale_notifications: list[tuple[str, str, str | None, str | None]] = []
         changed_ids: set[str] = set()
+        # Refreshed every tick: is_due/is_bookable are pure time windows and can
+        # flip true without any stored field changing, so a plain changed_ids
+        # diff would leave sensors (e.g. "Einnahme möglich") stuck stale.
+        live_cycle_ids: set[str] = set()
         async with self._lock:
             for profile in self.active_profiles:
                 normalized_closures = normalize_practice_closures(
@@ -2758,6 +2762,7 @@ class PillPalManager:
                     )
                 if not cycle_is_active(profile):
                     continue
+                live_cycle_ids.add(profile["person_id"])
                 slots = runtime.get("slots", {})
                 ordered = [slot for slot in ("morning", "noon", "evening", "night") if slot in slots]
                 for index, slot in enumerate(ordered):
@@ -2823,7 +2828,7 @@ class PillPalManager:
                     changed_ids.add(profile["person_id"])
             if changed_ids:
                 await self._async_save()
-        for person_id in changed_ids:
+        for person_id in changed_ids | live_cycle_ids:
             self._dispatch(person_id)
         for person_id, slot, tag, target in stale_notifications:
             self._create_task(
