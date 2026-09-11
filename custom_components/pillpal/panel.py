@@ -32,7 +32,7 @@ async def async_register_panels(hass: HomeAssistant) -> None:
     if hass.data["pillpal"].get("icon_module_registered") != STATIC_URL:
         # Registers the "pillpal:" custom ha-icon prefix sitewide, so the
         # sidebar can render the real brand mark instead of a generic MDI icon.
-        frontend.add_extra_js_url(hass, f"{STATIC_URL}/pillpal-icons.js?v=5100-22")
+        frontend.add_extra_js_url(hass, f"{STATIC_URL}/pillpal-icons.js?v=5100-23")
         hass.data["pillpal"]["icon_module_registered"] = STATIC_URL
 
     # A config-entry reload must replace panel metadata as well. Otherwise an
