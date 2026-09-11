@@ -7,7 +7,7 @@ from pathlib import Path
 
 DOMAIN = "pillpal"
 NAME = "Pill★Pal"
-VERSION = "5.2.0-beta.2"
+VERSION = "5.2.0"
 MIN_HA_VERSION = "2026.8.0"
 
 PLATFORMS = ["sensor", "binary_sensor", "button"]
@@ -31,8 +31,8 @@ SIGNAL_PROFILE_UPDATED = "pillpal_profile_updated_{}"
 
 PANEL_URL = "pillpal"
 ADMIN_PANEL_URL = "pillpal-admin"
-PANEL_COMPONENT = "pillpal-panel-5100-22"
-STATIC_URL = "/pillpal_static_5100_22"
+PANEL_COMPONENT = "pillpal-panel-5100-23"
+STATIC_URL = "/pillpal_static_5100_23"
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 SCHEDULER_INTERVAL = timedelta(seconds=30)
@@ -125,4 +125,5 @@ SERVICE_UPDATE_PRACTICE_CLOSURES = "update_practice_closures"
 SERVICE_ACKNOWLEDGE_ERRORS = "acknowledge_errors"
 SERVICE_RECALCULATE = "recalculate"
 SERVICE_STATISTICS = "statistics"
+SERVICE_CLEAR_STATISTICS = "clear_statistics"
 SERVICE_IMPORT_R410 = "import_r410"

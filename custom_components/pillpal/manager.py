@@ -53,6 +53,7 @@ from .model import (
     archive_medication,
     archive_removed_profile,
     book_as_needed,
+    clear_statistics,
     cycle_is_active,
     confirm_slot,
     end_cycle,
@@ -108,6 +109,7 @@ _ACTION_LABELS = {
     "acknowledge_errors": "Fehlerhinweise bestätigen",
     "recalculate": "Neu berechnen",
     "statistics": "Statistik abrufen",
+    "clear_statistics": "Statistikdaten löschen",
     "notification_action": "Benachrichtigungsaktion",
 }
 
@@ -1460,6 +1462,21 @@ class PillPalManager:
         return await self._mutate(
             person_id,
             lambda: acknowledge_errors(
+                self.data,
+                person_id,
+                actor=actor,
+                now=dt_util.now(),
+            ),
+        )
+
+    async def async_clear_statistics(
+        self, person_id: str, *, actor: str | None
+    ) -> dict[str, Any]:
+        """Erase all accumulated statistics data for one profile."""
+
+        return await self._mutate(
+            person_id,
+            lambda: clear_statistics(
                 self.data,
                 person_id,
                 actor=actor,

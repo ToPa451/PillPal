@@ -110,6 +110,12 @@ recalculate:
   fields:
     person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
 
+clear_statistics:
+  name: Statistikdaten löschen
+  description: Löscht unwiderruflich alle bisher erfassten Statistikereignisse und Tagesverläufe einer Person.
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+
 statistics:
   name: Statistik auswerten
   description: Liefert personenbezogene Summen, Tagesdetails und Heatmap mit frei kombinierbaren Filtern als Action-Antwort.

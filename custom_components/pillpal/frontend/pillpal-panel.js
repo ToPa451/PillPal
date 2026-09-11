@@ -66,6 +66,7 @@ class PillPalPanel extends HTMLElement {
     this._prnQuantity = 1;
     this._prnConfirmation = null;
     this._medId = "";
+    this._confirmDialog = null;
     this._adminMode = false;
     this._statsPeriod = "7";
     this._statsMedication = "";
@@ -284,6 +285,11 @@ class PillPalPanel extends HTMLElement {
   }
 
   async _click(event) {
+    if (event.target.classList?.contains("dialog-backdrop")) {
+      this._confirmDialog = null;
+      this._render();
+      return;
+    }
     const target = event.target.closest("[data-page],[data-action],[data-step],[data-adjust],[data-med],[data-stats-date],[data-closure-remove]");
     if (!target) return;
     if (target.dataset.page) {
@@ -542,6 +548,21 @@ class PillPalPanel extends HTMLElement {
       await this._call("refill", { medication_id: med.id, quantity: med.pack_size, expiry_date: expiry }, "Bestand wird aufgefüllt …", "Bestand wurde aufgefüllt.", "med-actions");
     } else if (action === "acknowledge_errors") {
       await this._call("acknowledge_errors", {}, "Fehlerhinweise werden bestätigt …", "Fehlerhinweise wurden als gelesen markiert.");
+    } else if (action === "clear-statistics") {
+      this._confirmDialog = {
+        icon: "mdi:delete-sweep-outline",
+        title: "Statistikdaten löschen",
+        message: "Damit werden alle bisher erfassten Statistikereignisse und Tagesverläufe dieser Person unwiderruflich gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
+        confirmAction: "confirm-clear-statistics",
+      };
+      this._render();
+    } else if (action === "confirm-clear-statistics") {
+      this._confirmDialog = null;
+      this._render();
+      await this._call("clear_statistics", {}, "Statistikdaten werden gelöscht …", "Statistikdaten wurden gelöscht.");
+    } else if (action === "cancel-dialog") {
+      this._confirmDialog = null;
+      this._render();
     } else if (action === "copy-order") {
       try {
         await navigator.clipboard.writeText(this._data?.profile?.order_plan?.clipboard_text || "");
@@ -687,16 +708,22 @@ class PillPalPanel extends HTMLElement {
     return `<div class="feedback-slot ${extraClass}" data-feedback-scope="${scope}" aria-live="polite">${this._feedbackMarkup(scope)}</div>`;
   }
 
+  _dialogMarkup() {
+    const dialog = this._confirmDialog;
+    if (!dialog) return "";
+    return `<div class="dialog-backdrop"><div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title"><ha-icon icon="${dialog.icon}"></ha-icon><h2 id="dialog-title">${esc(dialog.title)}</h2><p>${esc(dialog.message)}</p><div class="actions dialog-actions"><button type="button" class="secondary" data-action="cancel-dialog">Abbrechen</button><button type="button" class="danger" data-action="${dialog.confirmAction}"><ha-icon icon="mdi:delete-outline"></ha-icon>Löschen</button></div></div></div>`;
+  }
+
   _number(name, value, step = 1, min = 0, max = "") {
     return `<div class="number-field"><input name="${name}" type="number" value="${esc(value)}" step="${step}" min="${min}" ${max !== "" ? `max="${max}"` : ""} inputmode="decimal"><button type="button" data-adjust="${name}" data-direction="-1" data-amount="${step}" aria-label="Verringern">−</button><button type="button" data-adjust="${name}" data-direction="1" data-amount="${step}" aria-label="Erhöhen">+</button></div>`;
   }
 
   _renderLoading() {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5100_22/pillpal.css?v=5100-22"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5100_23/pillpal.css?v=5100-23"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
   }
 
   _renderFatal(err) {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5100_22/pillpal.css?v=5100-22"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5100_23/pillpal.css?v=5100-23"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
   }
 
   _render() {
@@ -709,12 +736,12 @@ class PillPalPanel extends HTMLElement {
       const text = this._adminMode
         ? "Es gibt keine Person, deren Profil du als Administrator betreuen darfst."
         : "Dein Home-Assistant-Benutzer ist keiner aufgenommenen Person zugeordnet.";
-      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5100_22/pillpal.css?v=5100-22"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
+      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5100_23/pillpal.css?v=5100-23"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
       return;
     }
     const meta = PAGE_META[this._page];
     this.shadowRoot.innerHTML = `
-      <link rel="stylesheet" href="/pillpal_static_5100_22/pillpal.css?v=5100-22">
+      <link rel="stylesheet" href="/pillpal_static_5100_23/pillpal.css?v=5100-23">
       <style>:host{--accent:${meta[1]}}</style>
       <main class="app page-${this._page} ${this.hass?.themes?.darkMode ? "theme-dark" : "theme-light"}">
         <header class="mobile-toolbar"><ha-menu-button></ha-menu-button><strong>Pill★Pal · ${meta[0]}</strong></header>
@@ -724,7 +751,8 @@ class PillPalPanel extends HTMLElement {
           ${this._feedbackSlot("page")}
           ${this._renderPage(profile)}
         </div>
-      </main>`;
+      </main>
+      ${this._dialogMarkup()}`;
     const menuButton = this.shadowRoot.querySelector("ha-menu-button");
     if (menuButton) {
       menuButton.hass = this._hass;
@@ -1009,8 +1037,9 @@ class PillPalPanel extends HTMLElement {
 
   _log(profile) {
     const rows = [...(profile.log || [])].reverse().map((item) => `<article class="log-row ${esc(item.level)}"><span class="dot"></span><div><p>${esc(this._localizedText(item.message))}</p><small>${item.actor ? `${esc(item.actor)} · ` : ""}${dateTime(item.timestamp)}</small></div></article>`).join("");
-    return `<div class="grid two log-grid">${this._section("Systeminformation", "mdi:folder-information-outline", `<article class="inner"><ha-icon icon="mdi:folder-information-outline"></ha-icon><div><strong>${brand(true)}-Version</strong><p>Revision ${esc(this._data.version)} · Datenschema ${esc(profile.schema || 1)}</p><small>Profil-ID: ${esc(profile.person_id)}</small></div></article>`)}${this._section("Diagnoseereignisse", "mdi:text-box-search-outline", `<div class="log-scroll">${rows || `<p class="muted">Noch keine Einträge.</p>`}</div>`)}</div>`;
+    const logBody = `<div class="log-scroll">${rows || `<p class="muted">Noch keine Einträge.</p>`}</div><div class="actions log-actions"><button type="button" data-action="clear-statistics"><ha-icon icon="mdi:delete-sweep-outline"></ha-icon>Statistikdaten löschen</button></div>`;
+    return `<div class="grid two log-grid">${this._section("Systeminformation", "mdi:folder-information-outline", `<article class="inner"><ha-icon icon="mdi:folder-information-outline"></ha-icon><div><strong>${brand(true)}-Version</strong><p>Revision ${esc(this._data.version)} · Datenschema ${esc(profile.schema || 1)}</p><small>Profil-ID: ${esc(profile.person_id)}</small></div></article>`)}${this._section("Diagnoseereignisse", "mdi:text-box-search-outline", logBody)}</div>`;
   }
 }
 
-if (!customElements.get("pillpal-panel-5100-22")) customElements.define("pillpal-panel-5100-22", PillPalPanel);
+if (!customElements.get("pillpal-panel-5100-23")) customElements.define("pillpal-panel-5100-23", PillPalPanel);

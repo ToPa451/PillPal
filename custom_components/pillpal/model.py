@@ -817,6 +817,39 @@ def acknowledge_errors(
     return {"acknowledged_at": timestamp}
 
 
+def clear_statistics(
+    store: dict[str, Any],
+    person_id: str,
+    *,
+    actor: str | None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Erase every accumulated statistics event and daily history entry.
+
+    Today's as-needed bookings are kept so the daily maximum-dose safety
+    check (which sums today's as-needed events) keeps working correctly for
+    the remainder of the current day.
+    """
+
+    profile = get_profile(store, person_id)
+    today = _local_now(now).date().isoformat()
+    profile["events"] = [
+        event
+        for event in profile.get("events", [])
+        if event.get("type") == "as_needed" and event.get("date") == today
+    ]
+    profile["history"] = {"daily": {}}
+    timestamp = iso_now(now)
+    append_log(
+        profile,
+        f"{profile['name']}: Statistikdaten wurden gelöscht.",
+        source="dashboard",
+        actor=actor,
+        now=now,
+    )
+    return {"cleared_at": timestamp}
+
+
 def add_event(
     profile: dict[str, Any],
     event_type: str,

@@ -20,6 +20,7 @@ from .const import (
     SERVICE_ADJUST_STOCK,
     SERVICE_ARCHIVE_MEDICATION,
     SERVICE_BOOK_AS_NEEDED,
+    SERVICE_CLEAR_STATISTICS,
     SERVICE_CONFIRM_SLOT,
     SERVICE_IMPORT_R410,
     SERVICE_REACTIVATE_MEDICATION,
@@ -231,6 +232,8 @@ async def _run_action(
         return await manager.async_acknowledge_errors(person_id, actor=actor)
     if action == SERVICE_RECALCULATE:
         return await manager.async_recalculate(person_id, actor=actor)
+    if action == SERVICE_CLEAR_STATISTICS:
+        return await manager.async_clear_statistics(person_id, actor=actor)
     if action == SERVICE_STATISTICS:
         return await manager.async_statistics(
             person_id,
@@ -372,6 +375,7 @@ def async_register_services(hass: HomeAssistant) -> None:
         SERVICE_ACKNOWLEDGE_ERRORS,
         SERVICE_RECALCULATE,
         SERVICE_STATISTICS,
+        SERVICE_CLEAR_STATISTICS,
     ):
         hass.services.async_register(
             DOMAIN,
@@ -409,6 +413,7 @@ def async_remove_services(hass: HomeAssistant) -> None:
         SERVICE_ACKNOWLEDGE_ERRORS,
         SERVICE_RECALCULATE,
         SERVICE_STATISTICS,
+        SERVICE_CLEAR_STATISTICS,
         SERVICE_IMPORT_R410,
     ):
         hass.services.async_remove(DOMAIN, service)
@@ -475,6 +480,7 @@ async def websocket_bootstrap(
                 SERVICE_ACKNOWLEDGE_ERRORS,
                 SERVICE_RECALCULATE,
                 SERVICE_STATISTICS,
+                SERVICE_CLEAR_STATISTICS,
             ]
         ),
         vol.Optional("admin_mode", default=False): bool,
