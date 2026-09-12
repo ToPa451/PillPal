@@ -1042,7 +1042,11 @@ def _validate_opening_time(label: str, value: Any) -> str:
 
 
 def normalize_opening_hours(data: Any) -> dict[str, dict[str, Any]]:
-    """Validate and normalize the per-weekday opening hours (Montag–Samstag)."""
+    """Validate and normalize the per-weekday opening hours (Montag–Samstag).
+
+    Each day carries up to two time ranges (e.g. morning/afternoon around a
+    lunch break); the second range may be left empty for days open only once.
+    """
 
     source = data if isinstance(data, Mapping) else {}
     result: dict[str, dict[str, Any]] = {}
@@ -1051,11 +1055,40 @@ def normalize_opening_hours(data: Any) -> dict[str, dict[str, Any]]:
         raw_day = raw_day if isinstance(raw_day, Mapping) else {}
         label = _DOCTOR_WEEKDAY_LABELS[day]
         enabled = bool(raw_day.get("enabled", False))
-        start = _validate_opening_time(f"{label} (von)", raw_day.get("from"))
-        end = _validate_opening_time(f"{label} (bis)", raw_day.get("to"))
-        if enabled and (not start or not end):
-            raise PillPalError(f"{label} benötigt eine Von- und Bis-Uhrzeit.")
-        result[day] = {"enabled": enabled, "from": start, "to": end}
+        raw_ranges = raw_day.get("ranges")
+        raw_ranges = raw_ranges if isinstance(raw_ranges, list) else []
+        ranges: list[dict[str, str]] = []
+        previous_end: time | None = None
+        for index in range(2):
+            raw_range = raw_ranges[index] if index < len(raw_ranges) else None
+            raw_range = raw_range if isinstance(raw_range, Mapping) else {}
+            part = f"{label} ({index + 1}. Zeitraum)"
+            start = _validate_opening_time(f"{part}, von", raw_range.get("from"))
+            end = _validate_opening_time(f"{part}, bis", raw_range.get("to"))
+            if enabled:
+                if bool(start) != bool(end):
+                    raise PillPalError(
+                        f"{part} benötigt sowohl eine Von- als auch eine Bis-Uhrzeit."
+                    )
+                if index == 0 and not start:
+                    raise PillPalError(
+                        f"{label} benötigt mindestens einen Zeitraum mit Von- und Bis-Uhrzeit."
+                    )
+                if start and end:
+                    start_time = time.fromisoformat(start)
+                    end_time = time.fromisoformat(end)
+                    if end_time < start_time:
+                        raise PillPalError(
+                            f"{part}: Die Bis-Uhrzeit darf nicht vor der Von-Uhrzeit liegen."
+                        )
+                    if previous_end is not None and start_time < previous_end:
+                        raise PillPalError(
+                            f"{label}: Der {index + 1}. Zeitraum darf nicht vor dem Ende "
+                            "des vorherigen Zeitraums beginnen."
+                        )
+                    previous_end = end_time
+            ranges.append({"from": start, "to": end})
+        result[day] = {"enabled": enabled, "ranges": ranges}
     return result
 
 
