@@ -14,7 +14,7 @@ const PAGES = [
 const SLOT_LABELS = { morning: "Morgens", noon: "Mittags", evening: "Abends", night: "Zur Nacht" };
 const SLOT_ICONS = { morning: "mdi:weather-sunset-up", noon: "mdi:white-balance-sunny", evening: "mdi:weather-sunset-down", night: "mdi:weather-night" };
 const DOCTOR_WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-const DOCTOR_WEEKDAY_LABELS = { monday: "Montag", tuesday: "Dienstag", wednesday: "Mittwoch", thursday: "Donnerstag", friday: "Freitag", saturday: "Samstag" };
+const DOCTOR_WEEKDAY_LABELS = { monday: "Mo", tuesday: "Di", wednesday: "Mi", thursday: "Do", friday: "Fr", saturday: "Sa" };
 const STATUS_LABELS = {
   not_planned: "Nicht geplant", planned: "Geplant", pending: "Ausstehend",
   notified: "Benachrichtigt", snoozed: "Zurückgestellt", taken: "Eingenommen",

@@ -413,12 +413,12 @@ th,td,.log-row{border-color:var(--line)}
 .opening-hours{grid-column:1/-1;display:flex;flex-direction:column;gap:8px}
 .opening-hours h3{margin:0 0 2px;display:flex;align-items:center;gap:8px;font-size:18px;color:var(--primary-text-color,#f4f6f7)}
 .opening-hours h3 ha-icon{color:var(--accent);--mdc-icon-size:22px}
-.opening-day{display:grid;grid-template-columns:130px 1fr 1fr;gap:10px;align-items:center}
+.opening-day{display:grid;grid-template-columns:64px 1fr 1fr;gap:10px;align-items:center}
 .opening-day .check{margin:0;padding:0;background:none;border:0}
 .notes-field{grid-column:1/-1}
 .notes-field textarea{min-height:80px;resize:vertical;font-family:inherit}
 @media(max-width:520px){
-  .opening-day{grid-template-columns:90px 1fr 1fr;gap:6px}
+  .opening-day{grid-template-columns:48px 1fr 1fr;gap:6px}
 }
 
 @media(max-width:520px){
