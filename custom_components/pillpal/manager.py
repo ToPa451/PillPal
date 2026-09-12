@@ -3181,15 +3181,17 @@ class PillPalManager:
                 f"-{person_id}"
             )
             common_data = {
-                # No timeout and no persistence: the notification remains until
-                # the user dismisses or opens it, but can still be swiped away.
-                "sticky": False,
+                # Sticky, ttl=0 and high FCM priority ensure Android delivers
+                # these update notifications immediately even while the phone
+                # is in standby.
+                "sticky": True,
                 "persistent": False,
                 "alert_once": True,
                 "importance": str(settings.get("notification_importance", "high")),
                 "priority": str(settings.get("notification_priority", "high")),
                 "visibility": str(settings.get("notification_visibility", "private")),
                 "group": str(settings.get("notification_group", "Medikation")),
+                "ttl": int(settings.get("notification_ttl", 0)),
                 "url": "/pillpal/bestand",
                 "clickAction": "/pillpal/bestand",
             }
@@ -3537,36 +3539,30 @@ class PillPalManager:
         data: dict[str, Any] = {
             "tag": tag,
             "persistent": False,
-            "sticky": False,
+            # Sticky, ttl=0 and high FCM priority are all required for Android
+            # to hand over the notification immediately while the phone is in
+            # standby; this applies to every acknowledgement/update message,
+            # not only ones that replace a currently sounding reminder.
+            "sticky": True,
             # Replacing the alarm must alert again so Android plays the short
             # sound of its General notification channel.  This is deliberately
             # distinct from the omitted alarm_stream channel and alarm sound.
             "alert_once": False if replaces_reminder else True,
-            # A feedback notification that replaces a currently sounding
-            # reminder must retain high-priority FCM delivery.  Otherwise
-            # Android may defer it while the screen is off.  Omitting the
-            # alarm channel and alarm sound routes Android through its normal
-            # General channel, whose short sound confirms the booking.
             "importance": str(
                 settings.get("notification_importance", "high")
                 if replaces_reminder
                 else "low"
             ),
-            "priority": str(
-                settings.get("notification_priority", "high")
-                if replaces_reminder
-                else "normal"
-            ),
+            "priority": str(settings.get("notification_priority", "high")),
             "visibility": str(settings.get("notification_visibility", "private")),
             "group": str(settings.get("notification_group", "Medikation")),
             "notification_icon": str(
                 settings.get("notification_icon", "mdi:medication-outline")
             ),
+            "ttl": int(settings.get("notification_ttl", 0)),
             "url": f"/{PANEL_URL}/overview",
             "clickAction": f"/{PANEL_URL}/overview",
         }
-        if replaces_reminder:
-            data["ttl"] = int(settings.get("notification_ttl", 0))
         return target, data
 
     def _next_intake_orientation(

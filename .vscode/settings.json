@@ -4,6 +4,8 @@
         "git tag": true,
         "gh": true,
         "git add": true,
-        "git commit": true
+        "git commit": true,
+        "Push-Location": true,
+        "Pop-Location": true
     }
 }
