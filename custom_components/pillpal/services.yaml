@@ -98,6 +98,17 @@ update_practice_closures:
   fields:
     person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
     closures: {name: Schließzeiten, required: true, selector: {object: {}}}
+save_doctor:
+  name: Arzt speichern
+  description: Legt einen Arzt im Profil einer Person an oder aktualisiert ihn.
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+    doctor: {name: Arzt, required: true, selector: {object: {}}}
+delete_doctor:
+  name: Arzt löschen
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+    doctor_id: {name: Arzt-ID, required: true, selector: {text: {}}}
 acknowledge_errors:
   name: Fehlerhinweise als gelesen markieren
   description: Markiert die aktuellen Diagnosefehler einer Person als gelesen.

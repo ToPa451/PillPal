@@ -66,6 +66,7 @@ class PillPalPanel extends HTMLElement {
     this._prnQuantity = 1;
     this._prnConfirmation = null;
     this._medId = "";
+    this._doctorId = "";
     this._adminMode = false;
     this._statsPeriod = "7";
     this._statsMedication = "";
@@ -211,7 +212,7 @@ class PillPalPanel extends HTMLElement {
     this.shadowRoot.addEventListener("click", (event) => this._click(event));
     this.shadowRoot.addEventListener("change", (event) => this._change(event));
     this.shadowRoot.addEventListener("input", (event) => {
-      if (event.target.closest?.("#settings-form,#med-form,#closure-form")) this._formDirty = true;
+      if (event.target.closest?.("#settings-form,#med-form,#closure-form,#doctor-form")) this._formDirty = true;
     });
     this.shadowRoot.addEventListener("submit", (event) => this._submit(event));
     this.shadowRoot.addEventListener("focusout", () => {
@@ -358,6 +359,11 @@ class PillPalPanel extends HTMLElement {
       this._medId = el.value;
       this._feedback = null;
       this._render();
+    } else if (el.id === "doctor-select") {
+      if (!this._allowDiscard()) { this._render(); return; }
+      this._doctorId = el.value;
+      this._feedback = null;
+      this._render();
     } else if (el.id === "stats-period") {
       this._statsPeriod = el.value;
       this._statsSelectedDate = "";
@@ -396,6 +402,7 @@ class PillPalPanel extends HTMLElement {
     if (form.id === "settings-form") await this._saveSettings(form);
     if (form.id === "med-form") await this._saveMedication(form);
     if (form.id === "closure-form") await this._saveClosure(form);
+    if (form.id === "doctor-form") await this._saveDoctor(form);
   }
 
   async _call(action, data, pending, success, scope = "page") {
@@ -542,6 +549,12 @@ class PillPalPanel extends HTMLElement {
       await this._call("refill", { medication_id: med.id, quantity: med.pack_size, expiry_date: expiry }, "Bestand wird aufgefüllt …", "Bestand wurde aufgefüllt.", "med-actions");
     } else if (action === "acknowledge_errors") {
       await this._call("acknowledge_errors", {}, "Fehlerhinweise werden bestätigt …", "Fehlerhinweise wurden als gelesen markiert.");
+    } else if (action === "delete_doctor") {
+      const doctor = this._selectedDoctor();
+      if (!doctor) return;
+      if (!window.confirm(`${doctor.name} wirklich löschen?`)) return;
+      this._doctorId = "";
+      await this._call("delete_doctor", { doctor_id: doctor.id }, "Arzt wird gelöscht …", "Arzt wurde gelöscht.", "doctor-actions");
     } else if (action === "clear-statistics") {
       if (!window.confirm("Damit werden alle bisher erfassten Statistikereignisse und Tagesverläufe dieser Person unwiderruflich gelöscht. Diese Aktion kann nicht rückgängig gemacht werden. Fortfahren?")) return;
       await this._call("clear_statistics", {}, "Statistikdaten werden gelöscht …", "Statistikdaten wurden gelöscht.");
@@ -601,9 +614,22 @@ class PillPalPanel extends HTMLElement {
     await this._call("update_practice_closures", { closures }, "Praxisschließung wird gespeichert …", "Praxisschließung wurde gespeichert.", "closure-form");
   }
 
+  async _saveDoctor(form) {
+    const raw = Object.fromEntries(new FormData(form).entries());
+    const doctor = this._selectedDoctor();
+    const payload = { ...(doctor?.id && this._doctorId !== "__new__" ? { id: doctor.id } : {}), ...raw };
+    const result = await this._call("save_doctor", { doctor: payload }, "Arzt wird gespeichert …", "Arzt wurde gespeichert.", "doctor-form");
+    if (result?.id) {
+      this._doctorId = result.id;
+      this._render();
+    }
+  }
+
   _selectedPrn() { return this._data?.profile?.as_needed_medications?.find((item) => item.id === this._prnId); }
   _allMedications() { return [...(this._data?.profile?.medications || []), ...(this._data?.profile?.archived_medications || [])]; }
   _selectedMedication() { return this._allMedications().find((item) => item.id === this._medId); }
+  _allDoctors() { return this._data?.profile?.doctors || []; }
+  _selectedDoctor() { return this._allDoctors().find((item) => item.id === this._doctorId); }
   _unit(med, quantity) { return Number(quantity) === 1 ? med.unit_singular : med.unit_plural; }
 
   _eventMedicationIds(event) {
@@ -911,11 +937,16 @@ class PillPalPanel extends HTMLElement {
     return `<div class="grid two inventory">${notices}${this._section("Regelmäßige Medikation", "mdi:medical-bag", regular.map((med) => this._medLine(med, true, projections.get(med.id))).join("") || `<div class="inner centered">Keine aktiven regelmäßigen Medikamente vorhanden.</div>`)}${this._section("Bedarfsmedikation", "mdi:flask-plus-outline", prn.map((med) => this._medLine(med, false)).join("") || `<div class="inner centered">Keine aktiven Bedarfsmedikamente vorhanden.</div>`)}</div>`;
   }
 
-  _praxis() {
+  _praxis(profile) {
     const closures = this._data.practice_closures || [];
+    const doctors = this._allDoctors();
+    const doctor = this._selectedDoctor();
+    const doctorData = doctor || { name: "", address: "", phone: "", opening_hours: "", homepage: "" };
+    const doctorOptions = `<option value="__new__" ${!doctor ? "selected" : ""}>+ Neuer Arzt</option>${doctors.map((item) => `<option value="${esc(item.id)}" ${item.id === this._doctorId ? "selected" : ""}>${esc(item.name)}</option>`).join("")}`;
+    const doctorSection = this._section("Ärzte", "mdi:account-tie-outline", `<div class="manage-top"><select id="doctor-select">${doctorOptions}</select>${doctor ? `<div class="actions"><button class="secondary" type="button" data-action="delete_doctor"><ha-icon icon="mdi:delete-outline"></ha-icon>Löschen</button></div>` : ""}</div>${this._feedbackSlot("doctor-actions", "action-feedback")}<form id="doctor-form" class="form-grid"><label>Name<input name="name" value="${esc(doctorData.name)}" required></label><label>Adresse<input name="address" value="${esc(doctorData.address)}"></label><label>Telefon<input name="phone" value="${esc(doctorData.phone)}"></label><label>Öffnungszeiten<input name="opening_hours" value="${esc(doctorData.opening_hours)}"></label><label>Homepage<input name="homepage" value="${esc(doctorData.homepage)}"></label><div class="form-actions"><button class="primary save" type="submit"><ha-icon icon="mdi:content-save-check"></ha-icon>Änderungen speichern</button><button class="secondary" type="button" data-action="discard-changes" data-scope="doctor-form"><ha-icon icon="mdi:restore"></ha-icon>Änderungen verwerfen</button></div>${this._feedbackSlot("doctor-form", "form-feedback")}</form>`);
     const status = this._data.profile?.practice_status || { open: true, title: "Praxisstatus wird ermittelt", detail: "" };
     const list = closures.map((item, index) => `<article class="inner closure"><ha-icon icon="mdi:office-building-marker-outline"></ha-icon><div><strong>${dateOnly(item.start)} bis ${dateOnly(item.end)}</strong><p>Diese laufende oder zukünftige Schließung fließt in alle Bestelltermine ein.</p></div><button class="secondary closure-remove" type="button" data-closure-remove="${index}"><ha-icon icon="mdi:delete-outline"></ha-icon>Entfernen</button></article>`).join("") || `<div class="inner centered">Keine laufende oder zukünftige Praxisschließung hinterlegt.</div>`;
-    return `<div class="grid two">${this._section("Status", "mdi:information-outline", `<article class="inner"><ha-icon icon="${status.open ? "mdi:doctor" : "mdi:office-building-marker-outline"}"></ha-icon><div><strong>${esc(status.title)}</strong><p>Nächster Öffnungstag: ${esc(status.next_open_weekday || "–")}, ${dateOnly(status.next_open_date)}.</p></div></article>`)}${this._section("Laufende und zukünftige Praxisschließungen", "mdi:office-building-marker-outline", `${list}<form id="closure-form" class="inner form-inline"><label>Von<input name="start" type="date" required></label><label>Bis<input name="end" type="date"></label><button class="primary" type="submit"><ha-icon icon="mdi:content-save-check"></ha-icon>Weitere Schließung hinzufügen</button>${this._feedbackSlot("closure-form", "form-feedback")}</form>`)}</div>`;
+    return `<div class="grid two">${this._section("Status", "mdi:information-outline", `<article class="inner"><ha-icon icon="${status.open ? "mdi:doctor" : "mdi:office-building-marker-outline"}"></ha-icon><div><strong>${esc(status.title)}</strong><p>Nächster Öffnungstag: ${esc(status.next_open_weekday || "–")}, ${dateOnly(status.next_open_date)}.</p></div></article>`)}${this._section("Laufende und zukünftige Praxisschließungen", "mdi:office-building-marker-outline", `${list}<form id="closure-form" class="inner form-inline"><label>Von<input name="start" type="date" required></label><label>Bis<input name="end" type="date"></label><button class="primary" type="submit"><ha-icon icon="mdi:content-save-check"></ha-icon>Weitere Schließung hinzufügen</button>${this._feedbackSlot("closure-form", "form-feedback")}</form>`)}</div>${doctorSection}`;
   }
 
   _verwalten(profile) {

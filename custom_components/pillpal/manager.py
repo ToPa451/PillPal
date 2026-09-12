@@ -56,6 +56,7 @@ from .model import (
     clear_statistics,
     cycle_is_active,
     confirm_slot,
+    delete_doctor,
     end_cycle,
     ensure_profile,
     ensure_today_schedule,
@@ -75,6 +76,7 @@ from .model import (
     refill,
     reminder_configuration_warning,
     regular_medications,
+    save_doctor,
     save_medication,
     select_actionable_slot,
     skip_slot,
@@ -1784,6 +1786,38 @@ class PillPalManager:
             person_id,
         )
         return result
+
+    async def async_save_doctor(
+        self,
+        person_id: str,
+        doctor: Mapping[str, Any],
+        *,
+        actor: str | None,
+    ) -> dict[str, Any]:
+        return await self._mutate(
+            person_id,
+            lambda: save_doctor(
+                self.data,
+                person_id,
+                doctor,
+                actor=actor,
+                now=dt_util.now(),
+            ),
+        )
+
+    async def async_delete_doctor(
+        self, person_id: str, doctor_id: str, *, actor: str | None
+    ) -> dict[str, Any]:
+        return await self._mutate(
+            person_id,
+            lambda: delete_doctor(
+                self.data,
+                person_id,
+                doctor_id,
+                actor=actor,
+                now=dt_util.now(),
+            ),
+        )
 
     async def async_recalculate(
         self, person_id: str, *, actor: str | None

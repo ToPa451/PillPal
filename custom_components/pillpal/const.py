@@ -7,7 +7,7 @@ from pathlib import Path
 
 DOMAIN = "pillpal"
 NAME = "Pill★Pal"
-VERSION = "5.2.1-beta.1"
+VERSION = "5.2.1-beta.2"
 MIN_HA_VERSION = "2026.8.0"
 
 PLATFORMS = ["sensor", "binary_sensor", "button"]
@@ -24,7 +24,7 @@ CONF_CREATE_EXAMPLE = "create_example_medication"
 
 STORAGE_KEY = "pillpal.profiles"
 STORAGE_VERSION = 1
-DATA_SCHEMA_VERSION = 9
+DATA_SCHEMA_VERSION = 10
 
 SIGNAL_DATA_UPDATED = "pillpal_data_updated"
 SIGNAL_PROFILE_UPDATED = "pillpal_profile_updated_{}"
@@ -122,6 +122,8 @@ SERVICE_REFILL = "refill"
 SERVICE_ADJUST_STOCK = "adjust_stock"
 SERVICE_UPDATE_SETTINGS = "update_settings"
 SERVICE_UPDATE_PRACTICE_CLOSURES = "update_practice_closures"
+SERVICE_SAVE_DOCTOR = "save_doctor"
+SERVICE_DELETE_DOCTOR = "delete_doctor"
 SERVICE_ACKNOWLEDGE_ERRORS = "acknowledge_errors"
 SERVICE_RECALCULATE = "recalculate"
 SERVICE_STATISTICS = "statistics"

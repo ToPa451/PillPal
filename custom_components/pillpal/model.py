@@ -123,6 +123,12 @@ class MedicationNotFoundError(PillPalError):
     code = "medication_not_found"
 
 
+class DoctorNotFoundError(PillPalError):
+    """Raised when a doctor is missing."""
+
+    code = "doctor_not_found"
+
+
 class DuplicateHelperError(PillPalError):
     """Raised when one physical helper is assigned to multiple people."""
 
@@ -603,6 +609,7 @@ def new_profile(
         "settings": deepcopy(DEFAULT_SETTINGS),
         "practice_closures": [],
         "medications": {},
+        "doctors": {},
         "runtime": _new_runtime(),
         "events": [],
         "history": {"daily": {}},
@@ -697,6 +704,7 @@ def ensure_profile(
     profile["settings"] = normalize_settings(stored_settings)
     profile.setdefault("practice_closures", [])
     profile.setdefault("medications", {})
+    profile.setdefault("doctors", {})
     profile.setdefault("events", [])
     profile.setdefault("history", {"daily": {}})
     profile.setdefault("log", [])
@@ -1007,6 +1015,93 @@ def normalize_medication(
             except ValueError as err:
                 raise PillPalError("Das MHD muss ein gültiges Datum sein.") from err
     return result
+
+
+def normalize_doctor(
+    data: Mapping[str, Any],
+    existing: Mapping[str, Any] | None = None,
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Validate and normalize one doctor payload."""
+
+    merged = deep_merge(existing or {}, data)
+    name = str(merged.get("name", "")).strip()
+    if not name:
+        raise PillPalError("Der Arztname darf nicht leer sein.")
+    doctor_id = str(merged.get("id") or slugify(name))
+    return {
+        "id": doctor_id,
+        "name": name,
+        "address": str(merged.get("address", "")).strip(),
+        "phone": str(merged.get("phone", "")).strip(),
+        "opening_hours": str(merged.get("opening_hours", "")).strip(),
+        "homepage": str(merged.get("homepage", "")).strip(),
+        "created_at": str(merged.get("created_at") or iso_now(now)),
+        "updated_at": iso_now(now),
+    }
+
+
+def save_doctor(
+    store: dict[str, Any],
+    person_id: str,
+    data: Mapping[str, Any],
+    *,
+    actor: str | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Create or update one doctor in exactly one profile."""
+
+    profile = get_profile(store, person_id)
+    requested_id = str(data.get("id", ""))
+    existing = profile["doctors"].get(requested_id) if requested_id else None
+    doctor = normalize_doctor(data, existing, now=now)
+    doctor_id = doctor["id"]
+    if not existing and doctor_id in profile["doctors"]:
+        suffix = 2
+        while f"{doctor_id}_{suffix}" in profile["doctors"]:
+            suffix += 1
+        doctor_id = doctor["id"] = f"{doctor_id}_{suffix}"
+    profile["doctors"][doctor_id] = doctor
+    verb = "geändert" if existing else "angelegt"
+    append_log(
+        profile,
+        f"{profile['name']}: Arzt {doctor['name']} wurde {verb}.",
+        source="doctor",
+        actor=actor,
+        now=now,
+    )
+    return deepcopy(doctor)
+
+
+def _get_doctor(profile: Mapping[str, Any], doctor_id: str) -> dict[str, Any]:
+    doctor = profile.get("doctors", {}).get(doctor_id)
+    if doctor is None:
+        raise DoctorNotFoundError(f"Unbekannter Arzt: {doctor_id}")
+    return doctor
+
+
+def delete_doctor(
+    store: dict[str, Any],
+    person_id: str,
+    doctor_id: str,
+    *,
+    actor: str | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Remove one doctor from exactly one profile."""
+
+    profile = get_profile(store, person_id)
+    doctor = _get_doctor(profile, doctor_id)
+    del profile["doctors"][doctor_id]
+    append_log(
+        profile,
+        f"{profile['name']}: Arzt {doctor['name']} wurde gelöscht.",
+        source="doctor",
+        actor=actor,
+        now=now,
+    )
+    return deepcopy(doctor)
 
 
 def _stored_datetime(value: Any) -> str | None:
@@ -1802,6 +1897,35 @@ def validate_store_payload(
                 if parsed is not None or key in {"archived_at", "as_needed_migrated_at"}:
                     medication[key] = parsed
             profile["medications"][medication_id] = medication
+
+        raw_doctors = raw_profile.get("doctors", {})
+        doctor_items: list[tuple[str, Any]] = []
+        if isinstance(raw_doctors, Mapping):
+            doctor_items = [(str(key), value) for key, value in raw_doctors.items()]
+        elif isinstance(raw_doctors, list):
+            profile_reasons.append(f"profiles.{person_id}.doctors wurde aus einer Liste repariert")
+            doctor_items = [
+                (str(item.get("id") or slugify(str(item.get("name", "arzt")))), item)
+                for item in raw_doctors
+                if isinstance(item, Mapping)
+            ]
+        else:
+            profile_reasons.append(f"profiles.{person_id}.doctors ist weder Objekt noch Liste")
+        profile["doctors"] = {}
+        for doctor_id, raw_doctor in doctor_items:
+            path = f"profiles.{person_id}.doctors.{doctor_id}"
+            if not doctor_id or not isinstance(raw_doctor, Mapping):
+                profile_reasons.append(f"{path} ist kein gültiger Arzt")
+                continue
+            try:
+                doctor = normalize_doctor({**dict(raw_doctor), "id": doctor_id}, now=current)
+            except PillPalError as err:
+                profile_reasons.append(f"{path} wurde verworfen: {err}")
+                continue
+            known_doctor_fields = set(doctor)
+            for key in sorted(str(item) for item in set(raw_doctor) - known_doctor_fields):
+                profile_reasons.append(f"{path}.{key} ist ein unbekanntes Arztfeld")
+            profile["doctors"][doctor_id] = doctor
 
         closures = raw_profile.get("practice_closures", [])
         if not isinstance(closures, list):
@@ -4502,6 +4626,10 @@ def snapshot(profile: Mapping[str, Any], now: datetime | None = None) -> dict[st
             for med in profile.get("medications", {}).values()
             if med.get("archived")
         ],
+        key=lambda item: item.get("name", "").casefold(),
+    )
+    result["doctors"] = sorted(
+        [deepcopy(doctor) for doctor in profile.get("doctors", {}).values()],
         key=lambda item: item.get("name", "").casefold(),
     )
     result["schedule"] = current_and_upcoming(profile, current)

@@ -22,10 +22,12 @@ from .const import (
     SERVICE_BOOK_AS_NEEDED,
     SERVICE_CLEAR_STATISTICS,
     SERVICE_CONFIRM_SLOT,
+    SERVICE_DELETE_DOCTOR,
     SERVICE_IMPORT_R410,
     SERVICE_REACTIVATE_MEDICATION,
     SERVICE_RECALCULATE,
     SERVICE_REFILL,
+    SERVICE_SAVE_DOCTOR,
     SERVICE_SAVE_MEDICATION,
     SERVICE_SKIP_SLOT,
     SERVICE_SNOOZE_SLOT,
@@ -228,6 +230,13 @@ async def _run_action(
         return await manager.async_update_practice_closures(
             person_id, list(data.get("closures", [])), actor=actor
         )
+    if action == SERVICE_SAVE_DOCTOR:
+        doctor = data.get("doctor", data)
+        return await manager.async_save_doctor(person_id, doctor, actor=actor)
+    if action == SERVICE_DELETE_DOCTOR:
+        return await manager.async_delete_doctor(
+            person_id, str(data.get("doctor_id", "")), actor=actor
+        )
     if action == SERVICE_ACKNOWLEDGE_ERRORS:
         return await manager.async_acknowledge_errors(person_id, actor=actor)
     if action == SERVICE_RECALCULATE:
@@ -372,6 +381,8 @@ def async_register_services(hass: HomeAssistant) -> None:
         SERVICE_ADJUST_STOCK,
         SERVICE_UPDATE_SETTINGS,
         SERVICE_UPDATE_PRACTICE_CLOSURES,
+        SERVICE_SAVE_DOCTOR,
+        SERVICE_DELETE_DOCTOR,
         SERVICE_ACKNOWLEDGE_ERRORS,
         SERVICE_RECALCULATE,
         SERVICE_STATISTICS,
@@ -410,6 +421,8 @@ def async_remove_services(hass: HomeAssistant) -> None:
         SERVICE_ADJUST_STOCK,
         SERVICE_UPDATE_SETTINGS,
         SERVICE_UPDATE_PRACTICE_CLOSURES,
+        SERVICE_SAVE_DOCTOR,
+        SERVICE_DELETE_DOCTOR,
         SERVICE_ACKNOWLEDGE_ERRORS,
         SERVICE_RECALCULATE,
         SERVICE_STATISTICS,
@@ -477,6 +490,8 @@ async def websocket_bootstrap(
                 SERVICE_REFILL,
                 SERVICE_UPDATE_SETTINGS,
                 SERVICE_UPDATE_PRACTICE_CLOSURES,
+                SERVICE_SAVE_DOCTOR,
+                SERVICE_DELETE_DOCTOR,
                 SERVICE_ACKNOWLEDGE_ERRORS,
                 SERVICE_RECALCULATE,
                 SERVICE_STATISTICS,
