@@ -4331,8 +4331,8 @@ def statistics(
                 Decimal("0"),
             )
         ),
-        "adherence": round((taken_total / planned_total * 100), 1)
-        if planned_total
+        "adherence": round((taken_total / (planned_total - pending_total) * 100), 1)
+        if (planned_total - pending_total) > 0
         else 0.0,
         "heatmap": heatmap,
         "day_details": daily.get(selected.isoformat(), {"date": selected.isoformat(), "events": []}),

@@ -407,19 +407,9 @@ th,td,.log-row{border-color:var(--line)}
   .log-scroll{max-height:64vh;min-height:190px}
   .page-log .log-scroll{max-height:calc(100dvh - 365px);min-height:270px}
 }
-.log-scroll+.log-actions{margin-top:14px}
-.dialog-backdrop{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:20px;background:#000000b3}
-.dialog{width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;color:var(--primary-text-color,#f4f6f7);background:var(--outer);border:1px solid var(--line);border-radius:var(--radius);padding:22px;box-shadow:0 8px 26px #0008}
-.dialog>ha-icon{color:#ff746a;--mdc-icon-size:34px}
-.dialog h2{margin:0;font-size:20px}
-.dialog p{margin:0;color:var(--pillpal-info-color);line-height:1.45}
-.dialog-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
-button.danger{background:#ff746a;border:1px solid #ff746a}
-@media(max-width:520px){
-  .dialog{padding:18px;gap:12px}
-  .dialog-actions{flex-direction:column-reverse}
-  .dialog-actions button{width:100%}
-}
+.log-column{min-width:0}
+.log-clear{padding:14px}
+.log-clear button{width:100%}
 
 @media(max-width:520px){
   .content{padding-inline:10px 8px}

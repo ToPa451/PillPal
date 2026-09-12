@@ -7,7 +7,7 @@ from pathlib import Path
 
 DOMAIN = "pillpal"
 NAME = "Pill★Pal"
-VERSION = "5.2.0"
+VERSION = "5.2.1-beta.1"
 MIN_HA_VERSION = "2026.8.0"
 
 PLATFORMS = ["sensor", "binary_sensor", "button"]
