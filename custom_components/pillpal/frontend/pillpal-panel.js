@@ -13,6 +13,8 @@ const PAGES = [
 
 const SLOT_LABELS = { morning: "Morgens", noon: "Mittags", evening: "Abends", night: "Zur Nacht" };
 const SLOT_ICONS = { morning: "mdi:weather-sunset-up", noon: "mdi:white-balance-sunny", evening: "mdi:weather-sunset-down", night: "mdi:weather-night" };
+const DOCTOR_WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+const DOCTOR_WEEKDAY_LABELS = { monday: "Montag", tuesday: "Dienstag", wednesday: "Mittwoch", thursday: "Donnerstag", friday: "Freitag", saturday: "Samstag" };
 const STATUS_LABELS = {
   not_planned: "Nicht geplant", planned: "Geplant", pending: "Ausstehend",
   notified: "Benachrichtigt", snoozed: "Zurückgestellt", taken: "Eingenommen",
@@ -343,6 +345,10 @@ class PillPalPanel extends HTMLElement {
       const settings = this.shadowRoot.querySelector(".expiry-settings");
       if (settings) settings.hidden = !el.checked;
       return;
+    } else if (el.name?.startsWith("oh_") && el.name.endsWith("_enabled")) {
+      const row = el.closest(".opening-day");
+      if (row) row.querySelectorAll('input[type="time"]').forEach((input) => { input.disabled = !el.checked; });
+      return;
     } else if (el.id === "person-select") {
       if (!this._allowDiscard()) { this._render(); return; }
       this._personGeneration += 1;
@@ -617,7 +623,14 @@ class PillPalPanel extends HTMLElement {
   async _saveDoctor(form) {
     const raw = Object.fromEntries(new FormData(form).entries());
     const doctor = this._selectedDoctor();
-    const payload = { ...(doctor?.id && this._doctorId !== "__new__" ? { id: doctor.id } : {}), ...raw };
+    const opening_hours = {};
+    for (const day of DOCTOR_WEEKDAYS) {
+      opening_hours[day] = { enabled: raw[`oh_${day}_enabled`] === "on", from: raw[`oh_${day}_from`] || "", to: raw[`oh_${day}_to`] || "" };
+      delete raw[`oh_${day}_enabled`];
+      delete raw[`oh_${day}_from`];
+      delete raw[`oh_${day}_to`];
+    }
+    const payload = { ...(doctor?.id && this._doctorId !== "__new__" ? { id: doctor.id } : {}), ...raw, opening_hours };
     const result = await this._call("save_doctor", { doctor: payload }, "Arzt wird gespeichert …", "Arzt wurde gespeichert.", "doctor-form");
     if (result?.id) {
       this._doctorId = result.id;
@@ -941,9 +954,10 @@ class PillPalPanel extends HTMLElement {
     const closures = this._data.practice_closures || [];
     const doctors = this._allDoctors();
     const doctor = this._selectedDoctor();
-    const doctorData = doctor || { name: "", address: "", phone: "", opening_hours: "", homepage: "" };
+    const doctorData = doctor || { name: "", street: "", house_number: "", postal_code: "", city: "", phone: "", opening_hours: {}, homepage: "", notes: "" };
     const doctorOptions = `<option value="__new__" ${!doctor ? "selected" : ""}>+ Neuer Arzt</option>${doctors.map((item) => `<option value="${esc(item.id)}" ${item.id === this._doctorId ? "selected" : ""}>${esc(item.name)}</option>`).join("")}`;
-    const doctorSection = this._section("Ärzte", "mdi:account-tie-outline", `<div class="manage-top"><select id="doctor-select">${doctorOptions}</select>${doctor ? `<div class="actions"><button class="secondary" type="button" data-action="delete_doctor"><ha-icon icon="mdi:delete-outline"></ha-icon>Löschen</button></div>` : ""}</div>${this._feedbackSlot("doctor-actions", "action-feedback")}<form id="doctor-form" class="form-grid"><label>Name<input name="name" value="${esc(doctorData.name)}" required></label><label>Adresse<input name="address" value="${esc(doctorData.address)}"></label><label>Telefon<input name="phone" value="${esc(doctorData.phone)}"></label><label>Öffnungszeiten<input name="opening_hours" value="${esc(doctorData.opening_hours)}"></label><label>Homepage<input name="homepage" value="${esc(doctorData.homepage)}"></label><div class="form-actions"><button class="primary save" type="submit"><ha-icon icon="mdi:content-save-check"></ha-icon>Änderungen speichern</button><button class="secondary" type="button" data-action="discard-changes" data-scope="doctor-form"><ha-icon icon="mdi:restore"></ha-icon>Änderungen verwerfen</button></div>${this._feedbackSlot("doctor-form", "form-feedback")}</form>`);
+    const openingHoursMarkup = `<div class="opening-hours"><h3><ha-icon icon="mdi:clock-outline"></ha-icon>Öffnungszeiten</h3>${DOCTOR_WEEKDAYS.map((day) => { const entry = doctorData.opening_hours?.[day] || { enabled: false, from: "", to: "" }; return `<div class="opening-day"><label class="check"><input type="checkbox" name="oh_${day}_enabled" ${entry.enabled ? "checked" : ""}>${DOCTOR_WEEKDAY_LABELS[day]}</label><input type="time" name="oh_${day}_from" value="${esc(entry.from)}" ${entry.enabled ? "" : "disabled"}><input type="time" name="oh_${day}_to" value="${esc(entry.to)}" ${entry.enabled ? "" : "disabled"}></div>`; }).join("")}</div>`;
+    const doctorSection = this._section("Ärzte", "mdi:account-tie-outline", `<div class="manage-top"><select id="doctor-select">${doctorOptions}</select>${doctor ? `<div class="actions"><button class="secondary" type="button" data-action="delete_doctor"><ha-icon icon="mdi:delete-outline"></ha-icon>Löschen</button></div>` : ""}</div>${this._feedbackSlot("doctor-actions", "action-feedback")}<form id="doctor-form" class="form-grid"><label>Name<input name="name" value="${esc(doctorData.name)}" required></label><label>Straße<input name="street" value="${esc(doctorData.street)}"></label><label>Hausnummer<input name="house_number" value="${esc(doctorData.house_number)}"></label><label>PLZ<input name="postal_code" value="${esc(doctorData.postal_code)}"></label><label>Ort<input name="city" value="${esc(doctorData.city)}"></label><label>Telefon<input name="phone" value="${esc(doctorData.phone)}"></label><label>Homepage<input name="homepage" value="${esc(doctorData.homepage)}"></label>${openingHoursMarkup}<label class="notes-field">Notizen<textarea name="notes" rows="3">${esc(doctorData.notes)}</textarea></label><div class="form-actions"><button class="primary save" type="submit"><ha-icon icon="mdi:content-save-check"></ha-icon>Änderungen speichern</button><button class="secondary" type="button" data-action="discard-changes" data-scope="doctor-form"><ha-icon icon="mdi:restore"></ha-icon>Änderungen verwerfen</button></div>${this._feedbackSlot("doctor-form", "form-feedback")}</form>`);
     const status = this._data.profile?.practice_status || { open: true, title: "Praxisstatus wird ermittelt", detail: "" };
     const list = closures.map((item, index) => `<article class="inner closure"><ha-icon icon="mdi:office-building-marker-outline"></ha-icon><div><strong>${dateOnly(item.start)} bis ${dateOnly(item.end)}</strong><p>Diese laufende oder zukünftige Schließung fließt in alle Bestelltermine ein.</p></div><button class="secondary closure-remove" type="button" data-closure-remove="${index}"><ha-icon icon="mdi:delete-outline"></ha-icon>Entfernen</button></article>`).join("") || `<div class="inner centered">Keine laufende oder zukünftige Praxisschließung hinterlegt.</div>`;
     return `<div class="grid two">${this._section("Status", "mdi:information-outline", `<article class="inner"><ha-icon icon="${status.open ? "mdi:doctor" : "mdi:office-building-marker-outline"}"></ha-icon><div><strong>${esc(status.title)}</strong><p>Nächster Öffnungstag: ${esc(status.next_open_weekday || "–")}, ${dateOnly(status.next_open_date)}.</p></div></article>`)}${this._section("Laufende und zukünftige Praxisschließungen", "mdi:office-building-marker-outline", `${list}<form id="closure-form" class="inner form-inline"><label>Von<input name="start" type="date" required></label><label>Bis<input name="end" type="date"></label><button class="primary" type="submit"><ha-icon icon="mdi:content-save-check"></ha-icon>Weitere Schließung hinzufügen</button>${this._feedbackSlot("closure-form", "form-feedback")}</form>`)}</div>${doctorSection}`;

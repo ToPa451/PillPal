@@ -1017,6 +1017,48 @@ def normalize_medication(
     return result
 
 
+DOCTOR_WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday")
+_DOCTOR_WEEKDAY_LABELS = {
+    "monday": "Montag",
+    "tuesday": "Dienstag",
+    "wednesday": "Mittwoch",
+    "thursday": "Donnerstag",
+    "friday": "Freitag",
+    "saturday": "Samstag",
+}
+
+
+def _validate_opening_time(label: str, value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if not re.fullmatch(r"\d{2}:\d{2}", text):
+        raise PillPalError(f"{label} muss als Uhrzeit HH:MM angegeben werden.")
+    try:
+        time.fromisoformat(text)
+    except ValueError as err:
+        raise PillPalError(f"{label} enthält keine gültige Uhrzeit.") from err
+    return text
+
+
+def normalize_opening_hours(data: Any) -> dict[str, dict[str, Any]]:
+    """Validate and normalize the per-weekday opening hours (Montag–Samstag)."""
+
+    source = data if isinstance(data, Mapping) else {}
+    result: dict[str, dict[str, Any]] = {}
+    for day in DOCTOR_WEEKDAYS:
+        raw_day = source.get(day)
+        raw_day = raw_day if isinstance(raw_day, Mapping) else {}
+        label = _DOCTOR_WEEKDAY_LABELS[day]
+        enabled = bool(raw_day.get("enabled", False))
+        start = _validate_opening_time(f"{label} (von)", raw_day.get("from"))
+        end = _validate_opening_time(f"{label} (bis)", raw_day.get("to"))
+        if enabled and (not start or not end):
+            raise PillPalError(f"{label} benötigt eine Von- und Bis-Uhrzeit.")
+        result[day] = {"enabled": enabled, "from": start, "to": end}
+    return result
+
+
 def normalize_doctor(
     data: Mapping[str, Any],
     existing: Mapping[str, Any] | None = None,
@@ -1033,10 +1075,14 @@ def normalize_doctor(
     return {
         "id": doctor_id,
         "name": name,
-        "address": str(merged.get("address", "")).strip(),
+        "street": str(merged.get("street", "")).strip(),
+        "house_number": str(merged.get("house_number", "")).strip(),
+        "postal_code": str(merged.get("postal_code", "")).strip(),
+        "city": str(merged.get("city", "")).strip(),
         "phone": str(merged.get("phone", "")).strip(),
-        "opening_hours": str(merged.get("opening_hours", "")).strip(),
+        "opening_hours": normalize_opening_hours(merged.get("opening_hours")),
         "homepage": str(merged.get("homepage", "")).strip(),
+        "notes": str(merged.get("notes", "")).strip(),
         "created_at": str(merged.get("created_at") or iso_now(now)),
         "updated_at": iso_now(now),
     }
