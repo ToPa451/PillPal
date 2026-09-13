@@ -329,6 +329,7 @@ th,td,.log-row{border-color:var(--line)}
 .log-row small{color:var(--pillpal-info-color)}
 .heatmap,.stat-day-grid{background:var(--inner);border:1px solid var(--line)}
 .heat,.heat-legend i,.stat-day-cell.heat-empty{background:color-mix(in srgb,var(--primary-text-color) 10%,var(--inner))}
+.stat-day-cell.heat-empty{color:var(--primary-text-color);text-shadow:none}
 .alert{background:var(--inner);box-shadow:none}
 
 @media(min-width:901px){
