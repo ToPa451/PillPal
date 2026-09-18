@@ -2357,7 +2357,30 @@ class PillPalManager:
                 elif entity_id == awake_entity:
                     self._reconcile_cycle_lifecycle(profile, current)
                 self._apply_dynamic_context(profile, current)
+                before_due = {
+                    slot: item.get("due_at")
+                    for slot, item in profile.get("runtime", {}).get("slots", {}).items()
+                }
                 rebuild_schedule(profile, current)
+                alarm_entity = str(settings.get("next_alarm_entity", ""))
+                if entity_id == alarm_entity:
+                    after_slots = profile.get("runtime", {}).get("slots", {})
+                    shifted = sorted(
+                        slot
+                        for slot, item in after_slots.items()
+                        if item.get("due_at") != before_due.get(slot)
+                    )
+                    if shifted:
+                        labels = ", ".join(
+                            SLOT_LABELS.get(slot, slot) for slot in shifted
+                        )
+                        append_log(
+                            profile,
+                            f"{profile['name']}: Zeitplan nach Änderung der Weckzeit "
+                            f"neu berechnet ({labels}).",
+                            source="recalculate",
+                            now=current,
+                        )
                 changed.append(profile["person_id"])
                 if entity_id == str(settings.get("holiday_calendar", "")):
                     calendar_changed.append(profile["person_id"])

@@ -6,6 +6,7 @@
         "git add": true,
         "git commit": true,
         "Push-Location": true,
-        "Pop-Location": true
+        "Pop-Location": true,
+        "&": true
     }
 }
