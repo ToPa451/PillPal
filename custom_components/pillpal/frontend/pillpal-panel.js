@@ -199,6 +199,8 @@ class PillPalPanel extends HTMLElement {
         ? [...activeMedications, ...(this._data?.profile?.archived_medications || [])]
         : activeMedications;
       if (!manageable.some((item) => item.id === this._medId)) this._medId = manageable[0]?.id || "";
+      const doctors = this._data?.profile?.doctors || [];
+      if (!doctors.some((item) => item.id === this._doctorId)) this._doctorId = doctors[0]?.id || "__new__";
       this._formDirty = false;
       this._refreshPending = false;
       return true;
@@ -214,7 +216,7 @@ class PillPalPanel extends HTMLElement {
     this.shadowRoot.addEventListener("click", (event) => this._click(event));
     this.shadowRoot.addEventListener("change", (event) => this._change(event));
     this.shadowRoot.addEventListener("input", (event) => {
-      if (event.target.closest?.("#settings-form,#med-form,#closure-form,#doctor-form")) this._formDirty = true;
+      if (event.target.closest?.("#settings-form,#med-form,#doctor-form")) this._formDirty = true;
     });
     this.shadowRoot.addEventListener("submit", (event) => this._submit(event));
     this.shadowRoot.addEventListener("focusout", () => {
@@ -304,11 +306,18 @@ class PillPalPanel extends HTMLElement {
       return;
     }
     if (target.dataset.closureRemove !== undefined) {
+      if (this._formDirty) {
+        this._setFeedback("error", "Bitte Änderungen am Arzt zuerst speichern oder verwerfen.", "closure-form");
+        return;
+      }
       const index = Number(target.dataset.closureRemove);
-      const closures = (this._data.practice_closures || []).filter((_, itemIndex) => itemIndex !== index);
-      if (!Number.isInteger(index) || index < 0 || index >= (this._data.practice_closures || []).length) return;
+      const doctor = this._selectedDoctor();
+      if (!doctor) return;
+      const storedClosures = doctor.practice_closures || [];
+      const closures = storedClosures.filter((_, itemIndex) => itemIndex !== index);
+      if (!Number.isInteger(index) || index < 0 || index >= storedClosures.length) return;
       if (!window.confirm("Diese Praxisschließung wirklich entfernen?")) return;
-      await this._call("update_practice_closures", { closures, replace_existing: true }, "Praxisschließung wird entfernt …", "Praxisschließung wurde entfernt.", "closure-form");
+      await this._call("update_practice_closures", { doctor_id: doctor.id, closures, replace_existing: true }, "Praxisschließung wird entfernt …", "Praxisschließung wurde entfernt.", "closure-form");
       return;
     }
     if (target.dataset.step) {
@@ -559,8 +568,8 @@ class PillPalPanel extends HTMLElement {
       const doctor = this._selectedDoctor();
       if (!doctor) return;
       if (!window.confirm(`${doctor.name} wirklich löschen?`)) return;
-      this._doctorId = "";
-      await this._call("delete_doctor", { doctor_id: doctor.id }, "Arzt wird gelöscht …", "Arzt wurde gelöscht.", "doctor-actions");
+      const result = await this._call("delete_doctor", { doctor_id: doctor.id }, "Arzt wird gelöscht …", "Arzt wurde gelöscht.", "doctor-actions");
+      if (result) this._doctorId = this._allDoctors()[0]?.id || "__new__";
     } else if (action === "clear-statistics") {
       if (!window.confirm("Damit werden alle bisher erfassten Statistikereignisse und Tagesverläufe dieser Person unwiderruflich gelöscht. Diese Aktion kann nicht rückgängig gemacht werden. Fortfahren?")) return;
       await this._call("clear_statistics", {}, "Statistikdaten werden gelöscht …", "Statistikdaten wurden gelöscht.");
@@ -616,8 +625,17 @@ class PillPalPanel extends HTMLElement {
 
   async _saveClosure(form) {
     const raw = Object.fromEntries(new FormData(form).entries());
+    if (this._formDirty) {
+      this._setFeedback("error", "Bitte Änderungen am Arzt zuerst speichern oder verwerfen.", "closure-form");
+      return;
+    }
+    const doctor = this._selectedDoctor();
+    if (!doctor) {
+      this._setFeedback("error", "Bitte den Arzt zuerst speichern.", "closure-form");
+      return;
+    }
     const closures = [{ start: raw.start, end: raw.end || raw.start }];
-    await this._call("update_practice_closures", { closures }, "Praxisschließung wird gespeichert …", "Praxisschließung wurde gespeichert.", "closure-form");
+    await this._call("update_practice_closures", { doctor_id: doctor.id, closures }, "Praxisschließung wird gespeichert …", "Praxisschließung wurde gespeichert.", "closure-form");
   }
 
   async _saveDoctor(form) {
@@ -738,11 +756,11 @@ class PillPalPanel extends HTMLElement {
   }
 
   _renderLoading() {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5100_23/pillpal.css?v=5100-23"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5222/pillpal.css?v=5222"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
   }
 
   _renderFatal(err) {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5100_23/pillpal.css?v=5100-23"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5222/pillpal.css?v=5222"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
   }
 
   _render() {
@@ -755,12 +773,12 @@ class PillPalPanel extends HTMLElement {
       const text = this._adminMode
         ? "Es gibt keine Person, deren Profil du als Administrator betreuen darfst."
         : "Dein Home-Assistant-Benutzer ist keiner aufgenommenen Person zugeordnet.";
-      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5100_23/pillpal.css?v=5100-23"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
+      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5222/pillpal.css?v=5222"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
       return;
     }
     const meta = PAGE_META[this._page];
     this.shadowRoot.innerHTML = `
-      <link rel="stylesheet" href="/pillpal_static_5100_23/pillpal.css?v=5100-23">
+      <link rel="stylesheet" href="/pillpal_static_5222/pillpal.css?v=5222">
       <style>:host{--accent:${meta[1]}}</style>
       <main class="app page-${this._page} ${this.hass?.themes?.darkMode ? "theme-dark" : "theme-light"}">
         <header class="mobile-toolbar"><ha-menu-button></ha-menu-button><strong>Pill★Pal · ${meta[0]}</strong></header>
@@ -955,16 +973,18 @@ class PillPalPanel extends HTMLElement {
   }
 
   _praxis(profile) {
-    const closures = this._data.practice_closures || [];
     const doctors = this._allDoctors();
     const doctor = this._selectedDoctor();
-    const doctorData = doctor || { name: "", street: "", house_number: "", postal_code: "", city: "", phone: "", opening_hours: {}, homepage: "", notes: "" };
+    const doctorData = doctor || { name: "", street: "", house_number: "", postal_code: "", city: "", phone: "", practice_closures: [], opening_hours: {}, homepage: "", notes: "" };
     const doctorOptions = `<option value="__new__" ${!doctor ? "selected" : ""}>+ Neuer Arzt</option>${doctors.map((item) => `<option value="${esc(item.id)}" ${item.id === this._doctorId ? "selected" : ""}>${esc(item.name)}</option>`).join("")}`;
     const openingHoursMarkup = `<div class="opening-hours"><h3><ha-icon icon="mdi:clock-outline"></ha-icon>Öffnungszeiten</h3>${DOCTOR_WEEKDAYS.map((day) => { const entry = doctorData.opening_hours?.[day] || { enabled: false, ranges: [] }; const ranges = [entry.ranges?.[0] || { from: "", to: "" }, entry.ranges?.[1] || { from: "", to: "" }]; const disabled = entry.enabled ? "" : "disabled"; const range = (suffix, item) => `<div class="opening-range"><input type="time" name="oh_${day}_from${suffix}" value="${esc(item.from)}" ${disabled}><span class="range-sep">–</span><input type="time" name="oh_${day}_to${suffix}" value="${esc(item.to)}" ${disabled}></div>`; return `<div class="opening-day"><label class="check"><input type="checkbox" name="oh_${day}_enabled" ${entry.enabled ? "checked" : ""}>${DOCTOR_WEEKDAY_LABELS[day]}</label><div class="opening-ranges">${range(1, ranges[0])}${range(2, ranges[1])}</div></div>`; }).join("")}</div>`;
-    const doctorSection = this._section("Ärzte", "mdi:account-tie-outline", `<div class="manage-top"><select id="doctor-select">${doctorOptions}</select>${doctor ? `<div class="actions"><button class="secondary" type="button" data-action="delete_doctor"><ha-icon icon="mdi:delete-outline"></ha-icon>Löschen</button></div>` : ""}</div>${this._feedbackSlot("doctor-actions", "action-feedback")}<form id="doctor-form" class="form-grid"><label>Name<input name="name" value="${esc(doctorData.name)}" required></label><label>Straße<input name="street" value="${esc(doctorData.street)}"></label><label>Hausnummer<input name="house_number" value="${esc(doctorData.house_number)}"></label><label>PLZ<input name="postal_code" value="${esc(doctorData.postal_code)}"></label><label>Ort<input name="city" value="${esc(doctorData.city)}"></label><label>Telefon<input name="phone" value="${esc(doctorData.phone)}"></label><label>Homepage<input name="homepage" value="${esc(doctorData.homepage)}"></label>${openingHoursMarkup}<label class="notes-field">Notizen<textarea name="notes" rows="3">${esc(doctorData.notes)}</textarea></label><div class="form-actions"><button class="primary save" type="submit"><ha-icon icon="mdi:content-save-check"></ha-icon>Änderungen speichern</button><button class="secondary" type="button" data-action="discard-changes" data-scope="doctor-form"><ha-icon icon="mdi:restore"></ha-icon>Änderungen verwerfen</button></div>${this._feedbackSlot("doctor-form", "form-feedback")}</form>`);
-    const status = this._data.profile?.practice_status || { open: true, title: "Praxisstatus wird ermittelt", detail: "" };
-    const list = closures.map((item, index) => `<article class="inner closure"><ha-icon icon="mdi:office-building-marker-outline"></ha-icon><div><strong>${dateOnly(item.start)} bis ${dateOnly(item.end)}</strong><p>Diese laufende oder zukünftige Schließung fließt in alle Bestelltermine ein.</p></div><button class="secondary closure-remove" type="button" data-closure-remove="${index}"><ha-icon icon="mdi:delete-outline"></ha-icon>Entfernen</button></article>`).join("") || `<div class="inner centered">Keine laufende oder zukünftige Praxisschließung hinterlegt.</div>`;
-    return `<div class="grid two">${this._section("Status", "mdi:information-outline", `<article class="inner"><ha-icon icon="${status.open ? "mdi:doctor" : "mdi:office-building-marker-outline"}"></ha-icon><div><strong>${esc(status.title)}</strong><p>Nächster Öffnungstag: ${esc(status.next_open_weekday || "–")}, ${dateOnly(status.next_open_date)}.</p></div></article>`)}${this._section("Laufende und zukünftige Praxisschließungen", "mdi:office-building-marker-outline", `${list}<form id="closure-form" class="inner form-inline"><label>Von<input name="start" type="date" required></label><label>Bis<input name="end" type="date"></label><button class="primary" type="submit"><ha-icon icon="mdi:content-save-check"></ha-icon>Weitere Schließung hinzufügen</button>${this._feedbackSlot("closure-form", "form-feedback")}</form>`)}</div>${doctorSection}`;
+    const statusItems = doctors.map((item) => { const status = item.practice_status || {}; const closureSummary = item.practice_closures?.length ? item.practice_closures.map((closure) => `${dateOnly(closure.start)} bis ${dateOnly(closure.end)}`).join("; ") : "Keine laufenden oder zukünftigen Schließzeiten"; return `<li><strong>${esc(item.name)}</strong><div><b>Status:</b> ${esc(status.title || "Praxisstatus wird ermittelt")}${status.detail ? ` – ${esc(status.detail)}` : ""}<br><b>Schließzeiten:</b> ${esc(closureSummary)}<br><b>Nächster Öffnungstag:</b> ${esc(status.next_open_weekday || "–")}, ${dateOnly(status.next_open_date)}</div></li>`; }).join("");
+    const statusSection = this._section("Praxisstatus", "mdi:information-outline", `<article class="inner practice-status"><div>${statusItems ? `<ul>${statusItems}</ul>` : `<p>Noch kein Arzt hinterlegt. Ohne Arztzuordnung werden bei Nachbestellungen keine Praxisschließzeiten berücksichtigt.</p>`}</div></article>`);
+    const closures = doctorData.practice_closures || [];
+    const closureList = closures.length ? `<div class="closure-list">${closures.map((item, index) => `<article class="inner closure"><div><strong>${dateOnly(item.start)} bis ${dateOnly(item.end)}</strong></div><button class="secondary closure-remove" type="button" data-closure-remove="${index}"><ha-icon icon="mdi:delete-outline"></ha-icon>Löschen</button></article>`).join("")}</div>` : "";
+    const closureEditor = doctor ? `<div class="doctor-closures"><h3>Praxisschließzeiten</h3>${closureList}<form id="closure-form" class="inner form-inline"><label>Von<input name="start" type="date" required></label><label>Bis<input name="end" type="date"></label><button class="primary" type="submit"><ha-icon icon="mdi:content-save-check"></ha-icon>Schließzeit hinzufügen</button>${this._feedbackSlot("closure-form", "form-feedback")}</form></div>` : `<div class="doctor-closures"><h3>Praxisschließzeiten</h3><p class="muted">Nach dem ersten Speichern des Arztes können hier Schließzeiten gepflegt werden.</p></div>`;
+    const doctorSection = this._section("Ärzte", "mdi:account-tie-outline", `<div class="manage-top"><select id="doctor-select">${doctorOptions}</select>${doctor ? `<div class="actions"><button class="secondary" type="button" data-action="delete_doctor"><ha-icon icon="mdi:delete-outline"></ha-icon>Löschen</button></div>` : ""}</div>${this._feedbackSlot("doctor-actions", "action-feedback")}${closureEditor}<form id="doctor-form" class="form-grid"><label>Name<input name="name" value="${esc(doctorData.name)}" required></label><label>Straße<input name="street" value="${esc(doctorData.street)}"></label><label>Hausnummer<input name="house_number" value="${esc(doctorData.house_number)}"></label><label>PLZ<input name="postal_code" value="${esc(doctorData.postal_code)}"></label><label>Ort<input name="city" value="${esc(doctorData.city)}"></label><label>Telefon<input name="phone" value="${esc(doctorData.phone)}"></label><label>Homepage<input name="homepage" value="${esc(doctorData.homepage)}"></label><label>Arzt-ID<input value="${esc(doctorData.id || "Wird beim Speichern erzeugt")}" readonly></label>${openingHoursMarkup}<label class="notes-field">Notizen<textarea name="notes" rows="3">${esc(doctorData.notes)}</textarea></label><div class="form-actions"><button class="primary save" type="submit"><ha-icon icon="mdi:content-save-check"></ha-icon>Änderungen speichern</button><button class="secondary" type="button" data-action="discard-changes" data-scope="doctor-form"><ha-icon icon="mdi:restore"></ha-icon>Änderungen verwerfen</button></div>${this._feedbackSlot("doctor-form", "form-feedback")}</form>`);
+    return `${statusSection}${doctorSection}`;
   }
 
   _verwalten(profile) {
@@ -977,10 +997,11 @@ class PillPalPanel extends HTMLElement {
     const unitChoices = [...UNIT_OPTIONS];
     if (!unitChoices.some(([one, many]) => `${one}|${many}` === unitValue)) unitChoices.push([data.unit_singular, data.unit_plural]);
     const helperOptions = `<option value="">Kein Taster-Helfer</option>${(this._data.options?.medication_button_helpers || []).map((item) => `<option value="${esc(item)}" ${item === data.button_helper ? "selected" : ""}>${esc(item)}</option>`).join("")}`;
+    const doctorOptions = `<option value="">Kein Arzt zugeordnet</option>${this._allDoctors().map((item) => `<option value="${esc(item.id)}" ${item.id === data.doctor_id ? "selected" : ""}>${esc(item.name)}</option>`).join("")}`;
     const currentYear = new Date().getFullYear();
     const expiryMin = `${currentYear - 1}-01-01`;
     const expiryMax = `${currentYear + 5}-12-31`;
-    return this._pageBody(`<div class="manage-top"><select id="med-select">${options}</select>${med ? `<div class="actions"><button class="secondary" data-action="refill"><ha-icon icon="mdi:package-up"></ha-icon>Auffüllen</button><button class="secondary" data-action="${med.archived ? "reactivate_medication" : "archive_medication"}"><ha-icon icon="mdi:archive-arrow-${med.archived ? "up" : "down"}-outline"></ha-icon>${med.archived ? "Reaktivieren" : "Archivieren"}</button></div>` : ""}</div>${this._feedbackSlot("med-actions", "action-feedback")}<form id="med-form" class="form-grid"><label>Name<input name="name" value="${esc(data.name)}" required></label><label>Beschreibung<input name="description" value="${esc(data.description)}"></label><label>Einheit<select name="unit_pair">${unitChoices.map(([one, many]) => `<option value="${esc(`${one}|${many}`)}" ${`${one}|${many}` === unitValue ? "selected" : ""}>${esc(`${one}/${many}`)}</option>`).join("")}</select></label><label>Kleinste Teilung<select name="step"><option value="0.25" ${Number(data.step) === .25 ? "selected" : ""}>Viertel (0,25)</option><option value="0.5" ${Number(data.step) === .5 ? "selected" : ""}>Halb (0,5)</option><option value="1" ${Number(data.step) === 1 ? "selected" : ""}>Ganz (1)</option></select></label><label>Packungsgröße${this._number("pack_size", data.pack_size, data.step || 1)}</label><label>Aktueller Bestand${this._number("stock", data.stock, data.step || 1)}</label><label>Kosten/Zuzahlung pro Packung (${esc(profile.settings.currency || "€")})${this._number("cost", data.cost, .01)}</label>${Object.entries(SLOT_LABELS).map(([slot, label]) => `<label>Dosis ${label}${this._number(`dose_${slot}`, data.doses?.[slot] || 0, data.step || 1)}</label>`).join("")}<label class="check"><input type="checkbox" name="as_needed_allowed" ${data.as_needed_allowed ? "checked" : ""}>Bedarfseinnahme erlauben</label><div class="prn-settings" ${data.as_needed_allowed ? "" : "hidden"}><label>Einzeldosis max.${this._number("single_max", data.single_max, data.step || 1)}</label><label>Tagesdosis max.${this._number("daily_max", data.daily_max, data.step || 1)}</label><label>Taster für Bedarfseinnahme<select name="button_helper">${helperOptions}</select></label><label>Menge je Tastendruck${this._number("button_amount", data.button_amount || data.step, data.step || 1, data.step || .001)}</label></div><label class="check"><input type="checkbox" name="expiry_enabled" ${data.expiry_enabled ? "checked" : ""}>MHD-Prüfung aktiv</label><label class="expiry-settings" ${data.expiry_enabled ? "" : "hidden"}>Frühestes MHD<input type="date" id="refill-expiry" name="expiry_date" min="${expiryMin}" max="${expiryMax}" value="${esc(data.expiry_date)}"></label><div class="form-actions"><button class="primary save" type="submit"><ha-icon icon="mdi:content-save-check"></ha-icon>Medikament speichern</button><button class="secondary" type="button" data-action="discard-changes" data-scope="med-form"><ha-icon icon="mdi:restore"></ha-icon>Änderungen verwerfen</button></div>${this._feedbackSlot("med-form", "form-feedback")}</form>`, "page-body-verwalten");
+    return this._pageBody(`<div class="manage-top"><select id="med-select">${options}</select>${med ? `<div class="actions"><button class="secondary" data-action="refill"><ha-icon icon="mdi:package-up"></ha-icon>Auffüllen</button><button class="secondary" data-action="${med.archived ? "reactivate_medication" : "archive_medication"}"><ha-icon icon="mdi:archive-arrow-${med.archived ? "up" : "down"}-outline"></ha-icon>${med.archived ? "Reaktivieren" : "Archivieren"}</button></div>` : ""}</div>${this._feedbackSlot("med-actions", "action-feedback")}<form id="med-form" class="form-grid"><label>Name<input name="name" value="${esc(data.name)}" required></label><label>Beschreibung<input name="description" value="${esc(data.description)}"></label><label>Arzt<select name="doctor_id">${doctorOptions}</select></label><label>Einheit<select name="unit_pair">${unitChoices.map(([one, many]) => `<option value="${esc(`${one}|${many}`)}" ${`${one}|${many}` === unitValue ? "selected" : ""}>${esc(`${one}/${many}`)}</option>`).join("")}</select></label><label>Kleinste Teilung<select name="step"><option value="0.25" ${Number(data.step) === .25 ? "selected" : ""}>Viertel (0,25)</option><option value="0.5" ${Number(data.step) === .5 ? "selected" : ""}>Halb (0,5)</option><option value="1" ${Number(data.step) === 1 ? "selected" : ""}>Ganz (1)</option></select></label><label>Packungsgröße${this._number("pack_size", data.pack_size, data.step || 1)}</label><label>Aktueller Bestand${this._number("stock", data.stock, data.step || 1)}</label><label>Kosten/Zuzahlung pro Packung (${esc(profile.settings.currency || "€")})${this._number("cost", data.cost, .01)}</label>${Object.entries(SLOT_LABELS).map(([slot, label]) => `<label>Dosis ${label}${this._number(`dose_${slot}`, data.doses?.[slot] || 0, data.step || 1)}</label>`).join("")}<label class="check"><input type="checkbox" name="as_needed_allowed" ${data.as_needed_allowed ? "checked" : ""}>Bedarfseinnahme erlauben</label><div class="prn-settings" ${data.as_needed_allowed ? "" : "hidden"}><label>Einzeldosis max.${this._number("single_max", data.single_max, data.step || 1)}</label><label>Tagesdosis max.${this._number("daily_max", data.daily_max, data.step || 1)}</label><label>Taster für Bedarfseinnahme<select name="button_helper">${helperOptions}</select></label><label>Menge je Tastendruck${this._number("button_amount", data.button_amount || data.step, data.step || 1, data.step || .001)}</label></div><label class="check"><input type="checkbox" name="expiry_enabled" ${data.expiry_enabled ? "checked" : ""}>MHD-Prüfung aktiv</label><label class="expiry-settings" ${data.expiry_enabled ? "" : "hidden"}>Frühestes MHD<input type="date" id="refill-expiry" name="expiry_date" min="${expiryMin}" max="${expiryMax}" value="${esc(data.expiry_date)}"></label><div class="form-actions"><button class="primary save" type="submit"><ha-icon icon="mdi:content-save-check"></ha-icon>Medikament speichern</button><button class="secondary" type="button" data-action="discard-changes" data-scope="med-form"><ha-icon icon="mdi:restore"></ha-icon>Änderungen verwerfen</button></div>${this._feedbackSlot("med-form", "form-feedback")}</form>`, "page-body-verwalten");
   }
 
   _settings(profile) {
@@ -1068,4 +1089,4 @@ class PillPalPanel extends HTMLElement {
   }
 }
 
-if (!customElements.get("pillpal-panel-5100-23")) customElements.define("pillpal-panel-5100-23", PillPalPanel);
+if (!customElements.get("pillpal-panel-5222")) customElements.define("pillpal-panel-5222", PillPalPanel);

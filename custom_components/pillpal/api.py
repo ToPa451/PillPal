@@ -236,6 +236,7 @@ async def _run_action(
             )
         return await manager.async_update_practice_closures(
             person_id,
+            str(data.get("doctor_id", "")),
             closures,
             actor=actor,
             replace_existing=bool(data.get("replace_existing", False)),

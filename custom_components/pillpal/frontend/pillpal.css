@@ -422,6 +422,18 @@ th,td,.log-row{border-color:var(--line)}
 .range-sep{color:var(--secondary-text-color);text-align:center}
 .notes-field{grid-column:1/-1}
 .notes-field textarea{min-height:80px;resize:vertical;font-family:inherit}
+.practice-status{align-items:flex-start}
+.practice-status>div{width:100%}
+.practice-status ul{margin:0;padding-left:22px;display:grid;gap:12px}
+.practice-status li::marker{color:var(--accent)}
+.practice-status li>div{margin-top:4px;color:var(--pillpal-info-color,#00bcd4);line-height:1.45}
+.doctor-closures{margin:0 0 14px;padding:16px;background:var(--inner);border:1px solid var(--line);border-radius:var(--small-radius)}
+.doctor-closures h3{margin:0 0 12px;font-size:18px}
+.doctor-closures>.muted{margin:0}
+.doctor-closures .closure-list{margin-bottom:10px}
+.doctor-closures .closure{padding:12px 14px}
+.doctor-closures #closure-form{padding:14px}
+.form-grid input[readonly]{color:var(--secondary-text-color);cursor:default}
 @media(max-width:520px){
   .opening-day{grid-template-columns:48px 1fr;gap:6px}
   .opening-range{gap:6px}

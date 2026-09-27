@@ -95,9 +95,10 @@ update_settings:
     settings: {name: Einstellungen, required: true, selector: {object: {}}}
 update_practice_closures:
   name: Praxisschließzeiten aktualisieren
-  description: Ergänzt Schließzeiten, entfernt Duplikate und führt überlappende Zeiträume zusammen.
+  description: Ergänzt die Schließzeiten eines Arztes, entfernt Duplikate und führt überlappende Zeiträume zusammen.
   fields:
     person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+    doctor_id: {name: Arzt-ID, required: true, selector: {text: {}}}
     closures: {name: Schließzeiten, required: true, selector: {object: {}}}
     replace_existing:
       name: Vorhandene Schließzeiten ersetzen

@@ -20,9 +20,6 @@ Pill★Pal is a Home Assistant–based medication manager optimized for mobile s
 * **Multi-language Support**  
   Support for languages other than German and English
 
-* **Manage Multiple Doctors**  
-  Manage multiple doctors and assign them to medications for accurate reorder reminders during clinic closures  
-
 * **Edit Dose History**  
   Correction of taken or skipped doses  
 
@@ -128,11 +125,11 @@ Reorder and expiration notices have distinct, person-specific titles. A single s
 
 ## Reordering, Expiration, and Medical Practice Planning
 
-For each active regular medication, Pill★Pal calculates the expected depletion date from current stock and daily dosage. This generates the standard order date and the effective order date. If the standard date falls within a contiguous block of weekends, public holidays, or stored practice closures, Pill★Pal checks whether enough actual opening days remain before depletion; otherwise, the reminder is advanced by the configured number of open practice days.
+For each active regular medication, Pill★Pal calculates the expected depletion date from current stock and daily dosage. This generates the standard order date and the effective order date. Medications can optionally be assigned to a stored doctor. If the standard date falls within a contiguous block of weekends, public holidays, or that doctor's practice closures, Pill★Pal checks whether enough actual opening days remain before depletion; otherwise, the reminder is advanced by the configured number of open practice days. Without a doctor assignment, no practice closure is applied.
 
 The joint reorder window includes additional preparations whose depletion occurs shortly after an already due medication. The reorder suggestion contains package sizes, costs/copayments, a copyable order text, and a warning if costs are incomplete. The same data is available as machine-readable attributes on the person-specific **Reorders** entity and within the dashboard.
 
-A connected holiday calendar is read ahead once daily as well as immediately following selection or state changes via `calendar.get_events`. A temporarily unsynchronized calendar is automatically fetched again without generating a diagnostic error or user warning. Technical details of successful fetches and real errors appear in the log, while the Practice page displays only compact status along with active or future closure periods; past periods are no longer displayed or calculated.
+A connected holiday calendar is read ahead once daily as well as immediately following selection or state changes via `calendar.get_events`. A temporarily unsynchronized calendar is automatically fetched again without generating a diagnostic error or user warning. Technical details of successful fetches and real errors appear in the log, while the Practice page displays every doctor's compact status and manages active or future closure periods per doctor; past periods are no longer displayed or calculated. A doctor cannot be deleted while any medication still references it.
 
 ## Statistics, History, and Diagnostic Log
 

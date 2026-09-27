@@ -24,7 +24,7 @@ try:
         SLOTS,
     )
 except ImportError:  # pragma: no cover - permits direct execution in simple tests
-    DATA_SCHEMA_VERSION = 9
+    DATA_SCHEMA_VERSION = 11
     DIAGNOSTIC_RETENTION_HOURS = 48
     SLOTS = ("morning", "noon", "evening", "night")
     SLOT_LABELS = {
@@ -979,6 +979,7 @@ def normalize_medication(
         "id": medication_id,
         "name": name,
         "description": str(merged.get("description", "")).strip(),
+        "doctor_id": str(merged.get("doctor_id", "")).strip(),
         "unit_singular": str(merged.get("unit_singular", "Einheit")).strip() or "Einheit",
         "unit_plural": str(merged.get("unit_plural", "Einheiten")).strip() or "Einheiten",
         "step": decimal_json(step),
@@ -1105,6 +1106,9 @@ def normalize_doctor(
     if not name:
         raise PillPalError("Der Arztname darf nicht leer sein.")
     doctor_id = str(merged.get("id") or slugify(name))
+    raw_closures = merged.get("practice_closures", [])
+    if not isinstance(raw_closures, list):
+        raw_closures = []
     return {
         "id": doctor_id,
         "name": name,
@@ -1113,6 +1117,9 @@ def normalize_doctor(
         "postal_code": str(merged.get("postal_code", "")).strip(),
         "city": str(merged.get("city", "")).strip(),
         "phone": str(merged.get("phone", "")).strip(),
+        "practice_closures": normalize_practice_closures(
+            raw_closures, (now or utc_now()).date()
+        ),
         "opening_hours": normalize_opening_hours(merged.get("opening_hours")),
         "homepage": str(merged.get("homepage", "")).strip(),
         "notes": str(merged.get("notes", "")).strip(),
@@ -1135,6 +1142,13 @@ def save_doctor(
     requested_id = str(data.get("id", ""))
     existing = profile["doctors"].get(requested_id) if requested_id else None
     doctor = normalize_doctor(data, existing, now=now)
+    legacy_closures = profile.get("practice_closures", [])
+    if legacy_closures:
+        doctor["practice_closures"] = normalize_practice_closures(
+            [*doctor.get("practice_closures", []), *legacy_closures],
+            (now or utc_now()).date(),
+        )
+        profile["practice_closures"] = []
     doctor_id = doctor["id"]
     if not existing and doctor_id in profile["doctors"]:
         suffix = 2
@@ -1172,6 +1186,16 @@ def delete_doctor(
 
     profile = get_profile(store, person_id)
     doctor = _get_doctor(profile, doctor_id)
+    assigned = sorted(
+        str(medication.get("name", medication_id))
+        for medication_id, medication in profile.get("medications", {}).items()
+        if medication.get("doctor_id") == doctor_id
+    )
+    if assigned:
+        raise PillPalError(
+            f"{doctor['name']} kann nicht gelöscht werden, solange noch Medikamente "
+            f"zugeordnet sind: {', '.join(assigned)}."
+        )
     del profile["doctors"][doctor_id]
     append_log(
         profile,
@@ -2023,6 +2047,24 @@ def validate_store_payload(
         profile["practice_closures"] = normalize_practice_closures(
             valid_closures, current.date()
         )
+        if profile["practice_closures"] and profile["doctors"]:
+            for doctor in profile["doctors"].values():
+                doctor["practice_closures"] = normalize_practice_closures(
+                    [
+                        *doctor.get("practice_closures", []),
+                        *profile["practice_closures"],
+                    ],
+                    current.date(),
+                )
+            profile["practice_closures"] = []
+        for medication_id, medication in profile["medications"].items():
+            doctor_id = str(medication.get("doctor_id", ""))
+            if doctor_id and doctor_id not in profile["doctors"]:
+                profile_reasons.append(
+                    f"profiles.{person_id}.medications.{medication_id}.doctor_id "
+                    "verweist auf keinen vorhandenen Arzt"
+                )
+                medication["doctor_id"] = ""
 
         for key in {"events", "log"}:
             raw_items = raw_profile.get(key, [])
@@ -2202,6 +2244,7 @@ def validate_store_payload(
 _MEDICATION_CHANGE_LABELS = {
     "name": "Name",
     "description": "Beschreibung",
+    "doctor_id": "Arzt",
     "unit_singular": "Einheit (Einzahl)",
     "unit_plural": "Einheit (Mehrzahl)",
     "step": "Kleinste Buchungsmenge",
@@ -2355,6 +2398,9 @@ def save_medication(
     """Create or update one medication in exactly one profile."""
 
     profile = get_profile(store, person_id)
+    doctor_id = str(data.get("doctor_id", "")).strip()
+    if doctor_id and doctor_id not in profile.get("doctors", {}):
+        raise DoctorNotFoundError(f"Unbekannter Arzt: {doctor_id}")
     requested_id = str(data.get("id", ""))
     existing = profile["medications"].get(requested_id) if requested_id else None
     before = deepcopy(existing) if isinstance(existing, Mapping) else None
@@ -3868,12 +3914,14 @@ def _practice_closed_reason(
     day_value: date,
     *,
     today: date | None = None,
+    doctor_id: str = "",
 ) -> str | None:
     """Return the machine-readable reason why the practice is closed."""
 
     if day_value.weekday() >= 5:
         return "weekend"
-    for closure in profile.get("practice_closures", []):
+    doctor = profile.get("doctors", {}).get(doctor_id, {}) if doctor_id else {}
+    for closure in doctor.get("practice_closures", []):
         try:
             start = date.fromisoformat(str(closure.get("start", "")))
             end = date.fromisoformat(str(closure.get("end", "")))
@@ -3892,16 +3940,20 @@ def _practice_closed_reason(
 
 
 def _contiguous_closed_interval(
-    profile: Mapping[str, Any], day_value: date, *, today: date
+    profile: Mapping[str, Any], day_value: date, *, today: date, doctor_id: str = ""
 ) -> tuple[date | None, date | None, list[str]]:
-    if _practice_closed_reason(profile, day_value, today=today) is None:
+    if _practice_closed_reason(
+        profile, day_value, today=today, doctor_id=doctor_id
+    ) is None:
         return None, None, []
     interval_start = day_value
     interval_end = day_value
     reasons: list[str] = []
     cursor = day_value
     for _ in range(740):
-        reason = _practice_closed_reason(profile, cursor, today=today)
+        reason = _practice_closed_reason(
+            profile, cursor, today=today, doctor_id=doctor_id
+        )
         if reason is None:
             break
         if reason not in reasons:
@@ -3910,7 +3962,9 @@ def _contiguous_closed_interval(
         cursor -= timedelta(days=1)
     cursor = day_value + timedelta(days=1)
     for _ in range(740):
-        reason = _practice_closed_reason(profile, cursor, today=today)
+        reason = _practice_closed_reason(
+            profile, cursor, today=today, doctor_id=doctor_id
+        )
         if reason is None:
             break
         if reason not in reasons:
@@ -3921,39 +3975,47 @@ def _contiguous_closed_interval(
 
 
 def _count_open_practice_days(
-    profile: Mapping[str, Any], start: date | None, end: date, *, today: date
+    profile: Mapping[str, Any], start: date | None, end: date, *, today: date,
+    doctor_id: str = "",
 ) -> int:
     if start is None or start > end:
         return 0
     count = 0
     cursor = start
     while cursor <= end:
-        if _practice_closed_reason(profile, cursor, today=today) is None:
+        if _practice_closed_reason(
+            profile, cursor, today=today, doctor_id=doctor_id
+        ) is None:
             count += 1
         cursor += timedelta(days=1)
     return count
 
 
 def _next_open_practice_day(
-    profile: Mapping[str, Any], start: date, *, today: date
+    profile: Mapping[str, Any], start: date, *, today: date, doctor_id: str = ""
 ) -> date | None:
     cursor = start
     for _ in range(1460):
-        if _practice_closed_reason(profile, cursor, today=today) is None:
+        if _practice_closed_reason(
+            profile, cursor, today=today, doctor_id=doctor_id
+        ) is None:
             return cursor
         cursor += timedelta(days=1)
     return None
 
 
 def _subtract_open_practice_days(
-    profile: Mapping[str, Any], boundary: date, count: int, *, today: date
+    profile: Mapping[str, Any], boundary: date, count: int, *, today: date,
+    doctor_id: str = "",
 ) -> date:
     remaining = max(0, count)
     cursor = boundary - timedelta(days=1)
     for _ in range(1460):
         if remaining <= 0:
             break
-        if _practice_closed_reason(profile, cursor, today=today) is None:
+        if _practice_closed_reason(
+            profile, cursor, today=today, doctor_id=doctor_id
+        ) is None:
             remaining -= 1
         if remaining > 0:
             cursor -= timedelta(days=1)
@@ -3967,10 +4029,13 @@ def order_date_with_practice_calendar(
     lead_days: int,
     *,
     today: date,
+    doctor_id: str = "",
 ) -> dict[str, Any]:
     """Adjust an order date across weekends, closures and future holidays."""
 
-    reason = _practice_closed_reason(profile, normal_date, today=today)
+    reason = _practice_closed_reason(
+        profile, normal_date, today=today, doctor_id=doctor_id
+    )
     if reason is None:
         return {
             "effective_date": normal_date,
@@ -3982,21 +4047,22 @@ def order_date_with_practice_calendar(
             "closed_reasons": [],
         }
     closed_from, closed_to, reasons = _contiguous_closed_interval(
-        profile, normal_date, today=today
+        profile, normal_date, today=today, doctor_id=doctor_id
     )
     assert closed_from is not None and closed_to is not None
     next_open = _next_open_practice_day(
-        profile, closed_to + timedelta(days=1), today=today
+        profile, closed_to + timedelta(days=1), today=today, doctor_id=doctor_id
     )
     open_after = _count_open_practice_days(
-        profile, next_open, empty_date - timedelta(days=1), today=today
+        profile, next_open, empty_date - timedelta(days=1), today=today,
+        doctor_id=doctor_id
     )
     if open_after >= max(0, lead_days):
         effective = normal_date
         result_reason = "practice_closure_noted"
     else:
         effective = _subtract_open_practice_days(
-            profile, closed_from, lead_days, today=today
+            profile, closed_from, lead_days, today=today, doctor_id=doctor_id
         )
         result_reason = "practice_closure_advanced"
     return {
@@ -4028,14 +4094,25 @@ def order_plan(profile: Mapping[str, Any], now: datetime | None = None) -> dict[
         days_remaining = int(stock // daily)
         empty_date = today + timedelta(days=days_remaining)
         normal_date = empty_date - timedelta(days=warning_days)
+        doctor_id = str(medication.get("doctor_id", ""))
+        doctor = profile.get("doctors", {}).get(doctor_id) if doctor_id else None
+        if doctor is None:
+            doctor_id = ""
         timing = order_date_with_practice_calendar(
-            profile, normal_date, empty_date, lead_days, today=today
+            profile,
+            normal_date,
+            empty_date,
+            lead_days,
+            today=today,
+            doctor_id=doctor_id,
         )
         effective_date = timing["effective_date"]
         projections.append(
             {
                 "medication_id": medication["id"],
                 "name": medication.get("name", medication["id"]),
+                "doctor_id": doctor_id or None,
+                "doctor_name": doctor.get("name") if doctor else None,
                 "unit_singular": medication.get("unit_singular", "Einheit"),
                 "unit_plural": medication.get("unit_plural", "Einheiten"),
                 "current_stock": decimal_json(stock),
@@ -4559,6 +4636,8 @@ def normalize_practice_closures(
     current_date = today or date.today()
     normalized: list[dict[str, str]] = []
     for item in closures:
+        if not isinstance(item, Mapping):
+            continue
         start_raw = str(item.get("start", "")).strip()
         end_raw = str(item.get("end", "")).strip() or start_raw
         try:
@@ -4582,14 +4661,47 @@ def normalize_practice_closures(
     return merged
 
 
-def practice_status(profile: Mapping[str, Any], now: datetime | None = None) -> dict[str, Any]:
+def practice_status(
+    profile: Mapping[str, Any],
+    now: datetime | None = None,
+    doctor_id: str = "",
+) -> dict[str, Any]:
     """Return the current practice state from weekends, calendars and closures."""
 
     current = _local_now(now)
+    doctors = profile.get("doctors", {})
+    if not doctor_id and doctors:
+        statuses = [
+            {
+                "doctor_id": stored_id,
+                "doctor_name": doctor.get("name", stored_id),
+                **practice_status(profile, current, stored_id),
+            }
+            for stored_id, doctor in doctors.items()
+        ]
+        open_count = sum(bool(status["open"]) for status in statuses)
+        if len(statuses) == 1:
+            aggregate = deepcopy(statuses[0])
+            aggregate["doctor_id"] = None
+        else:
+            aggregate = deepcopy(next((item for item in statuses if item["open"]), statuses[0]))
+            aggregate.update(
+                {
+                    "doctor_id": None,
+                    "open": open_count > 0,
+                    "reason": "doctor_statuses",
+                    "title": f"{open_count} von {len(statuses)} Arztpraxen heute geöffnet",
+                    "detail": "Die einzelnen Praxisstatus sind im Attribut doctors enthalten.",
+                }
+            )
+        aggregate["doctors"] = statuses
+        return aggregate
     today = current.date()
     runtime = profile.get("runtime", {})
     forecast = runtime.get("holiday_calendar_forecast", {})
-    reason_code = _practice_closed_reason(profile, today, today=today)
+    reason_code = _practice_closed_reason(
+        profile, today, today=today, doctor_id=doctor_id
+    )
     reason_labels = {
         "weekend": "Wochenende",
         "practice_closure": "hinterlegte Praxisschließung",
@@ -4598,17 +4710,24 @@ def practice_status(profile: Mapping[str, Any], now: datetime | None = None) -> 
     reason = reason_labels.get(reason_code, "")
     if reason_code:
         _closed_from, closed_to, _reasons = _contiguous_closed_interval(
-            profile, today, today=today
+            profile, today, today=today, doctor_id=doctor_id
         )
         next_open = _next_open_practice_day(
-            profile, (closed_to or today) + timedelta(days=1), today=today
+            profile,
+            (closed_to or today) + timedelta(days=1),
+            today=today,
+            doctor_id=doctor_id,
         )
     else:
         next_open = _next_open_practice_day(
-            profile, today + timedelta(days=1), today=today
+            profile,
+            today + timedelta(days=1),
+            today=today,
+            doctor_id=doctor_id,
         )
     calendar_entity = str(profile.get("settings", {}).get("holiday_calendar", ""))
     return {
+        "doctor_id": doctor_id or None,
         "open": not bool(reason),
         "reason": reason_code,
         "title": "Praxis heute regulär geöffnet" if not reason else "Praxis heute geschlossen",
@@ -4719,6 +4838,13 @@ def snapshot(profile: Mapping[str, Any], now: datetime | None = None) -> dict[st
         [deepcopy(doctor) for doctor in profile.get("doctors", {}).values()],
         key=lambda item: item.get("name", "").casefold(),
     )
+    for doctor in result["doctors"]:
+        doctor["practice_closures"] = normalize_practice_closures(
+            doctor.get("practice_closures", []), current.date()
+        )
+        doctor["practice_status"] = practice_status(
+            profile, current, str(doctor.get("id", ""))
+        )
     result["schedule"] = current_and_upcoming(profile, current)
     for group in result["schedule"].values():
         for slot_data in group:
@@ -4727,6 +4853,9 @@ def snapshot(profile: Mapping[str, Any], now: datetime | None = None) -> dict[st
             slot_data.pop("notification_reservation_id", None)
     result["statistics"] = statistics(profile, 7, current)
     result["practice_status"] = practice_status(profile, current)
+    result["practice_statuses"] = [
+        deepcopy(doctor["practice_status"]) for doctor in result["doctors"]
+    ]
     result["order_plan"] = order_plan(profile, current)
     result["expiry_plan"] = expiry_plan(profile, current)
     result["warning"] = reminder_configuration_warning(profile)

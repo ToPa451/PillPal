@@ -541,11 +541,27 @@ class PillPalManager:
             self.data.pop("practice_closures", []), dt_util.now().date()
         )
         for profile in self.active_profiles:
-            if legacy_closures and not profile.get("practice_closures"):
-                profile["practice_closures"] = deepcopy(legacy_closures)
-            profile["practice_closures"] = normalize_practice_closures(
-                profile.get("practice_closures", []), dt_util.now().date()
+            profile_legacy_closures = normalize_practice_closures(
+                [*profile.get("practice_closures", []), *legacy_closures],
+                dt_util.now().date(),
             )
+            doctors = profile.get("doctors", {})
+            if profile_legacy_closures and doctors:
+                for doctor in doctors.values():
+                    doctor["practice_closures"] = normalize_practice_closures(
+                        [
+                            *doctor.get("practice_closures", []),
+                            *profile_legacy_closures,
+                        ],
+                        dt_util.now().date(),
+                    )
+                profile["practice_closures"] = []
+            else:
+                profile["practice_closures"] = profile_legacy_closures
+            for doctor in doctors.values():
+                doctor["practice_closures"] = normalize_practice_closures(
+                    doctor.get("practice_closures", []), dt_util.now().date()
+                )
             current = dt_util.now()
             self._apply_dynamic_context(profile, current)
             self._reconcile_cycle_lifecycle(
@@ -1764,6 +1780,7 @@ class PillPalManager:
     async def async_update_practice_closures(
         self,
         person_id: str,
+        doctor_id: str,
         closures: list[Mapping[str, Any]],
         *,
         actor: str | None,
@@ -1771,16 +1788,19 @@ class PillPalManager:
     ) -> list[dict[str, str]]:
         def operation() -> list[dict[str, str]]:
             profile = self.profile(person_id)
+            doctor = profile.get("doctors", {}).get(doctor_id)
+            if doctor is None:
+                raise PillPalError(f"Unbekannter Arzt: {doctor_id}")
             candidates = closures
             if not replace_existing:
-                candidates = [*profile.get("practice_closures", []), *closures]
+                candidates = [*doctor.get("practice_closures", []), *closures]
             normalized = normalize_practice_closures(
                 candidates, dt_util.now().date()
             )
-            profile["practice_closures"] = normalized
+            doctor["practice_closures"] = normalized
             append_log(
                 profile,
-                f"{profile['name']}: Praxisschließzeiten aktualisiert.",
+                f"{profile['name']}: Praxisschließzeiten für {doctor['name']} aktualisiert.",
                 source="practice",
                 actor=actor,
                 now=dt_util.now(),
@@ -2814,12 +2834,13 @@ class PillPalManager:
         live_cycle_ids: set[str] = set()
         async with self._lock:
             for profile in self.active_profiles:
-                normalized_closures = normalize_practice_closures(
-                    profile.get("practice_closures", []), now.date()
-                )
-                if normalized_closures != profile.get("practice_closures", []):
-                    profile["practice_closures"] = normalized_closures
-                    changed_ids.add(profile["person_id"])
+                for doctor in profile.get("doctors", {}).values():
+                    normalized_closures = normalize_practice_closures(
+                        doctor.get("practice_closures", []), now.date()
+                    )
+                    if normalized_closures != doctor.get("practice_closures", []):
+                        doctor["practice_closures"] = normalized_closures
+                        changed_ids.add(profile["person_id"])
                 runtime = profile.get("runtime", {})
                 before_cycle_id = runtime.get("cycle_id")
                 before_notifications = [
