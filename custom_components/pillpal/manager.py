@@ -930,6 +930,7 @@ class PillPalManager:
                 "heatmap",
                 "day_details",
                 "available_medications",
+                "available_doctors",
                 "available_slots",
             }
             safe: dict[str, Any] = {}
@@ -997,6 +998,7 @@ class PillPalManager:
         *,
         days: int = 30,
         medication_id: str | None = None,
+        doctor_id: str | None = None,
         slot: str | None = None,
         start_date: date | None = None,
         end_date: date | None = None,
@@ -1010,6 +1012,7 @@ class PillPalManager:
                 days,
                 dt_util.now(),
                 medication_id=medication_id,
+                doctor_id=doctor_id,
                 slot=slot,
                 start_date=start_date,
                 end_date=end_date,

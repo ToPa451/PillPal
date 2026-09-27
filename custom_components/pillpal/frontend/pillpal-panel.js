@@ -72,7 +72,10 @@ class PillPalPanel extends HTMLElement {
     this._adminMode = false;
     this._statsPeriod = "7";
     this._statsMedication = "";
+    this._statsDoctor = "";
     this._statsSlot = "";
+    this._inventoryDoctor = "";
+    this._inventoryClipboardText = "";
     this._statsFrom = "";
     this._statsTo = "";
     this._statsSelectedDate = "";
@@ -188,6 +191,7 @@ class PillPalPanel extends HTMLElement {
       if (this._statisticsPersonId && this._statisticsPersonId !== this._data?.selected_person_id) {
         this._statistics = null;
         this._statsMedication = "";
+        this._statsDoctor = "";
         this._statsSelectedDate = "";
       }
       const meds = this._data?.profile?.as_needed_medications || [];
@@ -201,6 +205,7 @@ class PillPalPanel extends HTMLElement {
       if (!manageable.some((item) => item.id === this._medId)) this._medId = manageable[0]?.id || "";
       const doctors = this._data?.profile?.doctors || [];
       if (!doctors.some((item) => item.id === this._doctorId)) this._doctorId = doctors[0]?.id || "__new__";
+      if (this._inventoryDoctor !== "__none__" && this._inventoryDoctor && !doctors.some((item) => item.id === this._inventoryDoctor)) this._inventoryDoctor = "";
       this._formDirty = false;
       this._refreshPending = false;
       return true;
@@ -386,6 +391,9 @@ class PillPalPanel extends HTMLElement {
     } else if (el.id === "stats-medication") {
       this._statsMedication = el.value;
       await this._loadStatistics();
+    } else if (el.id === "stats-doctor") {
+      this._statsDoctor = el.value;
+      await this._loadStatistics();
     } else if (el.id === "stats-slot") {
       this._statsSlot = el.value;
       await this._loadStatistics();
@@ -408,6 +416,9 @@ class PillPalPanel extends HTMLElement {
         this._medId = this._data?.profile?.medications?.[0]?.id || "";
       }
       await this._call("update_settings", { settings: { show_archived: el.checked } }, "Ansicht wird aktualisiert …", "Archivansicht wurde aktualisiert.", "med-actions");
+    } else if (el.id === "inventory-doctor") {
+      this._inventoryDoctor = el.value;
+      this._render();
     }
   }
 
@@ -484,6 +495,7 @@ class PillPalPanel extends HTMLElement {
       admin_mode: this._adminMode,
       days: Math.max(1, Math.min(3660, Number(this._statsPeriod) || 7)),
       ...(this._statsMedication ? { medication_id: this._statsMedication } : {}),
+      ...(this._statsDoctor ? { doctor_id: this._statsDoctor } : {}),
       ...(this._statsSlot ? { slot: this._statsSlot } : {}),
       ...(this._statsSelectedDate ? { selected_day: this._statsSelectedDate } : {}),
     };
@@ -575,7 +587,7 @@ class PillPalPanel extends HTMLElement {
       await this._call("clear_statistics", {}, "Statistikdaten werden gelöscht …", "Statistikdaten wurden gelöscht.");
     } else if (action === "copy-order") {
       try {
-        await navigator.clipboard.writeText(this._data?.profile?.order_plan?.clipboard_text || "");
+        await navigator.clipboard.writeText(this._inventoryClipboardText || this._data?.profile?.order_plan?.clipboard_text || "");
         this._feedback = { type: "success", text: "Bestelltext wurde in die Zwischenablage kopiert.", scope: "page" };
       } catch (err) {
         this._feedback = { type: "error", text: `Bestelltext konnte nicht kopiert werden: ${err?.message || err}`, scope: "page" };
@@ -727,6 +739,18 @@ class PillPalPanel extends HTMLElement {
     return `<ul class="medication-list stats-medications"><li>${details}${quantity ? ` – ${quantity}` : ""}</li></ul>`;
   }
 
+  _eventDoctorList(event) {
+    const stored = Array.isArray(event.medications) && event.medications.length
+      ? event.medications.map((item) => ({ id: item.doctor_id || "", name: item.doctor_name || "" }))
+      : [{ id: event.doctor_id || "", name: event.doctor_name || "" }];
+    const available = this._statistics?.available_doctors || [];
+    const labels = stored.map((item) => item.name
+      || available.find((doctor) => doctor.doctor_id === item.id)?.name
+      || this._allDoctors().find((doctor) => doctor.id === item.id)?.name
+      || (item.id ? item.id : "Kein Arzt zugeordnet"));
+    return esc([...new Set(labels)].join(", ") || "Kein Arzt zugeordnet");
+  }
+
   _localizedText(value) {
     let text = String(value ?? "");
     text = text.replace(/\b\d{4}-\d{2}-\d{2}\b/g, (date) => dateOnly(date));
@@ -756,11 +780,11 @@ class PillPalPanel extends HTMLElement {
   }
 
   _renderLoading() {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5222/pillpal.css?v=5222"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5223/pillpal.css?v=5223"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
   }
 
   _renderFatal(err) {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5222/pillpal.css?v=5222"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5223/pillpal.css?v=5223"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
   }
 
   _render() {
@@ -773,12 +797,12 @@ class PillPalPanel extends HTMLElement {
       const text = this._adminMode
         ? "Es gibt keine Person, deren Profil du als Administrator betreuen darfst."
         : "Dein Home-Assistant-Benutzer ist keiner aufgenommenen Person zugeordnet.";
-      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5222/pillpal.css?v=5222"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
+      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_5223/pillpal.css?v=5223"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
       return;
     }
     const meta = PAGE_META[this._page];
     this.shadowRoot.innerHTML = `
-      <link rel="stylesheet" href="/pillpal_static_5222/pillpal.css?v=5222">
+      <link rel="stylesheet" href="/pillpal_static_5223/pillpal.css?v=5223">
       <style>:host{--accent:${meta[1]}}</style>
       <main class="app page-${this._page} ${this.hass?.themes?.darkMode ? "theme-dark" : "theme-light"}">
         <header class="mobile-toolbar"><ha-menu-button></ha-menu-button><strong>Pill★Pal · ${meta[0]}</strong></header>
@@ -922,8 +946,9 @@ class PillPalPanel extends HTMLElement {
       ...(profile.medications || []).map((med) => ({ medication_id: med.id, name: med.name, archived: false })),
       ...(showArchived ? (profile.archived_medications || []).map((med) => ({ medication_id: med.id, name: med.name, archived: true })) : []),
     ];
+    const doctors = stats?.available_doctors || this._allDoctors().map((doctor) => ({ doctor_id: doctor.id, name: doctor.name }));
     const customDates = this._statsPeriod === "custom" ? `<label>Von<input id="stats-from" type="date" value="${esc(this._statsFrom)}"></label><label>Bis<input id="stats-to" type="date" value="${esc(this._statsTo)}"></label>` : "";
-    const filters = `<div class="stats-filters"><label>Zeitraum<select id="stats-period"><option value="7" ${this._statsPeriod === "7" ? "selected" : ""}>7 Tage</option><option value="30" ${this._statsPeriod === "30" ? "selected" : ""}>30 Tage</option><option value="90" ${this._statsPeriod === "90" ? "selected" : ""}>90 Tage</option><option value="365" ${this._statsPeriod === "365" ? "selected" : ""}>1 Jahr</option><option value="custom" ${this._statsPeriod === "custom" ? "selected" : ""}>Benutzerdefiniert</option></select></label>${customDates}<label>Medikament<select id="stats-medication"><option value="">Alle Medikamente</option>${options.map((med) => `<option value="${esc(med.medication_id)}" ${med.medication_id === this._statsMedication ? "selected" : ""}>${med.archived ? "[Archiv] " : ""}${esc(med.name)}</option>`).join("")}</select></label><label>Einnahmezeit<select id="stats-slot"><option value="">Alle Einnahmezeiten</option>${Object.entries(SLOT_LABELS).map(([slot, label]) => `<option value="${slot}" ${slot === this._statsSlot ? "selected" : ""}>${label}</option>`).join("")}<option value="as_needed" ${this._statsSlot === "as_needed" ? "selected" : ""}>Bedarf</option></select></label><label class="archive-toggle"><input id="stats-show-archived" type="checkbox" ${showArchived ? "checked" : ""}><span>Archivierte auch auswerten</span></label></div>`;
+    const filters = `<div class="stats-filters"><label>Zeitraum<select id="stats-period"><option value="7" ${this._statsPeriod === "7" ? "selected" : ""}>7 Tage</option><option value="30" ${this._statsPeriod === "30" ? "selected" : ""}>30 Tage</option><option value="90" ${this._statsPeriod === "90" ? "selected" : ""}>90 Tage</option><option value="365" ${this._statsPeriod === "365" ? "selected" : ""}>1 Jahr</option><option value="custom" ${this._statsPeriod === "custom" ? "selected" : ""}>Benutzerdefiniert</option></select></label>${customDates}<label>Medikament<select id="stats-medication"><option value="">Alle Medikamente</option>${options.map((med) => `<option value="${esc(med.medication_id)}" ${med.medication_id === this._statsMedication ? "selected" : ""}>${med.archived ? "[Archiv] " : ""}${esc(med.name)}</option>`).join("")}</select></label><label>Arzt<select id="stats-doctor"><option value="">Alle Ärzte</option><option value="__none__" ${this._statsDoctor === "__none__" ? "selected" : ""}>Kein Arzt zugeordnet</option>${doctors.map((doctor) => `<option value="${esc(doctor.doctor_id)}" ${doctor.doctor_id === this._statsDoctor ? "selected" : ""}>${esc(doctor.name)}</option>`).join("")}</select></label><label>Einnahmezeit<select id="stats-slot"><option value="">Alle Einnahmezeiten</option>${Object.entries(SLOT_LABELS).map(([slot, label]) => `<option value="${slot}" ${slot === this._statsSlot ? "selected" : ""}>${label}</option>`).join("")}<option value="as_needed" ${this._statsSlot === "as_needed" ? "selected" : ""}>Bedarf</option></select></label><label class="archive-toggle"><input id="stats-show-archived" type="checkbox" ${showArchived ? "checked" : ""}><span>Archivierte auch auswerten</span></label></div>`;
     const filterSection = this._section("Auswertung filtern", "mdi:filter-variant", filters);
     if (!stats) {
       const message = this._statisticsError || (this._statisticsLoading ? "Statistik wird geladen …" : "Statistikdaten werden vorbereitet …");
@@ -941,35 +966,50 @@ class PillPalPanel extends HTMLElement {
       const slotLabel = event.slot ? (SLOT_LABELS[event.slot] || "Unbekannte Einnahmezeit") : "";
       const eventLabel = EVENT_LABELS[event.type] || "Unbekanntes Ereignis";
       const type = `${slotLabel ? `${slotLabel} · ` : ""}${eventLabel}`;
-      return `<tr><td>${dateTime(event.timestamp)}</td><td>${esc(type)}</td><td>${this._eventMedicationList(event, this._statsMedication)}</td></tr>`;
+      return `<tr><td>${dateTime(event.timestamp)}</td><td>${esc(type)}</td><td>${this._eventDoctorList(event)}</td><td>${this._eventMedicationList(event, this._statsMedication)}</td></tr>`;
     }).join("");
     const selectedDateLabel = dateOnly(stats.selected_day);
     const periodLabel = `${dateOnly(stats.period_start)} bis ${dateOnly(stats.period_end)}`;
     const loading = this._statisticsLoading ? `<div class="feedback pending"><ha-icon icon="mdi:progress-clock"></ha-icon>Statistik wird aktualisiert …</div>` : this._statisticsError ? `<div class="feedback error"><ha-icon icon="mdi:alert-circle"></ha-icon>${esc(this._statisticsError)}</div>` : "";
-    return `${filterSection}${loading}${this._section(`Gesamtstatistik · ${periodLabel}`, "mdi:counter", `<div class="stats">${cards.map(([label, value, icon]) => `<article class="inner"><ha-icon icon="${icon}"></ha-icon><div><strong>${label}</strong><p>${value}</p></div></article>`).join("")}</div>`)}${this._section("Tagesstatistik im Zeitraum", "mdi:calendar-blank-multiple", `<div class="stat-day-grid">${heat}</div><div class="heat-legend"><span><i class="heat-current"></i>laufender Tag mit offenen Einnahmen</span><span><i class="heat-complete"></i>vollständig</span><span><i class="heat-complete-prn"></i>vollständig + Bedarf</span><span><i class="heat-partial"></i>unvollständig</span><span><i class="heat-not-occurred"></i>nicht erfolgt</span><span><i class="heat-prn"></i>nur Bedarf</span><span><i class="heat-empty"></i>keine Planung/Buchung</span></div>`)}${this._section(`Buchungen und Planung · ${selectedDateLabel}`, "mdi:table", `<div class="table-wrap"><table><thead><tr><th>Zeit</th><th>Typ</th><th>Details und Menge</th></tr></thead><tbody>${events || `<tr><td colspan="3">Keine Planung oder Buchung am ausgewählten Tag.</td></tr>`}</tbody></table></div>`)}`;
+    return `${filterSection}${loading}${this._section(`Gesamtstatistik · ${periodLabel}`, "mdi:counter", `<div class="stats">${cards.map(([label, value, icon]) => `<article class="inner"><ha-icon icon="${icon}"></ha-icon><div><strong>${label}</strong><p>${value}</p></div></article>`).join("")}</div>`)}${this._section("Tagesstatistik im Zeitraum", "mdi:calendar-blank-multiple", `<div class="stat-day-grid">${heat}</div><div class="heat-legend"><span><i class="heat-current"></i>laufender Tag mit offenen Einnahmen</span><span><i class="heat-complete"></i>vollständig</span><span><i class="heat-complete-prn"></i>vollständig + Bedarf</span><span><i class="heat-partial"></i>unvollständig</span><span><i class="heat-not-occurred"></i>nicht erfolgt</span><span><i class="heat-prn"></i>nur Bedarf</span><span><i class="heat-empty"></i>keine Planung/Buchung</span></div>`)}${this._section(`Buchungen und Planung · ${selectedDateLabel}`, "mdi:table", `<div class="table-wrap"><table><thead><tr><th>Zeit</th><th>Typ</th><th>Arzt</th><th>Details und Menge</th></tr></thead><tbody>${events || `<tr><td colspan="4">Keine Planung oder Buchung am ausgewählten Tag.</td></tr>`}</tbody></table></div>`)}`;
   }
 
   _medLine(med, regular, projection = null) {
     const unit = this._unit(med, med.stock);
     const doses = Object.values(med.doses || {}).map(num).join("-");
     const orderDetails = regular && projection ? ` · Reichweite <b>${days(projection.days_remaining)}</b> · voraussichtlich leer <b>${dateOnly(projection.projected_empty_date)}</b> · Bestelltag <b>${dateOnly(projection.effective_order_date)}</b>` : regular ? ` · Reichweite <b>${med.days_remaining == null ? "–" : days(med.days_remaining)}</b>` : "";
-    return `<article class="inner medline"><strong>${esc(med.name)}</strong><p>${esc(med.unit_plural)} · ${esc(med.description || "Ohne Beschreibung")} · Bestand <b>${num(med.stock)} ${esc(unit)}</b>${orderDetails}${regular ? ` · Schema <b>${doses}</b>` : ` · Einzeldosis max. <b>${num(med.single_max)} ${esc(unit)}</b> · Tagesdosis max. <b>${num(med.daily_max)} ${esc(unit)}</b>`}${med.expiry_enabled && med.expiry_date ? ` · MHD <b>${dateOnly(med.expiry_date)}</b>` : ""}</p></article>`;
+    const doctor = med.doctor_name
+      || this._allDoctors().find((item) => item.id === med.doctor_id)?.name
+      || "Kein Arzt zugeordnet";
+    return `<article class="inner medline"><strong>${esc(med.name)}</strong><p>Arzt <b>${esc(doctor)}</b> · ${esc(med.unit_plural)} · ${esc(med.description || "Ohne Beschreibung")} · Bestand <b>${num(med.stock)} ${esc(unit)}</b>${orderDetails}${regular ? ` · Schema <b>${doses}</b>` : ` · Einzeldosis max. <b>${num(med.single_max)} ${esc(unit)}</b> · Tagesdosis max. <b>${num(med.daily_max)} ${esc(unit)}</b>`}${med.expiry_enabled && med.expiry_date ? ` · MHD <b>${dateOnly(med.expiry_date)}</b>` : ""}</p></article>`;
   }
 
   _bestand(profile) {
-    const regular = profile.regular_medications || [];
-    const prn = profile.as_needed_medications || [];
+    const doctorMatches = (item) => !this._inventoryDoctor
+      || (this._inventoryDoctor === "__none__" ? !item.doctor_id : item.doctor_id === this._inventoryDoctor);
+    const regular = (profile.regular_medications || []).filter(doctorMatches);
+    const prn = (profile.as_needed_medications || []).filter(doctorMatches);
     const plan = profile.order_plan || { items: [], projections: [] };
     const projections = new Map((plan.projections || []).map((item) => [item.medication_id, item]));
-    const orderItems = (plan.items || []).map((item) => {
+    const filteredOrderItems = (plan.items || []).filter(doctorMatches);
+    const orderItems = filteredOrderItems.map((item) => {
       const closure = ["practice_closure_advanced", "practice_closure_noted"].includes(item.reason) ? ` · Schließblock ${dateOnly(item.closed_from)} bis ${dateOnly(item.closed_to)}${item.reason === "practice_closure_advanced" ? " · Erinnerung vorgezogen" : ""}` : "";
-      return `<article class="inner order-line"><ha-icon icon="${item.status === "order_now" ? "mdi:cart-arrow-down" : "mdi:cart-plus"}"></ha-icon><div><strong>${esc(item.status_label)} · ${esc(item.name)}</strong><p>Bestand ${num(item.current_stock)} · Tagesdosis ${num(item.daily_dose)} · leer am ${dateOnly(item.projected_empty_date)} · normaler Bestelltag ${dateOnly(item.normal_order_date)} · wirksamer Bestelltag ${dateOnly(item.effective_order_date)} · Packung ${num(item.pack_size)} · Kosten/Zuzahlung ${Number(item.pack_cost) > 0 ? `${num(item.pack_cost)} ${esc(plan.currency)}` : "nicht gepflegt"}${closure}</p></div></article>`;
+      return `<article class="inner order-line"><ha-icon icon="${item.status === "order_now" ? "mdi:cart-arrow-down" : "mdi:cart-plus"}"></ha-icon><div><strong>${esc(item.status_label)} · ${esc(item.name)}</strong><p>Arzt ${esc(item.doctor_name || "Kein Arzt zugeordnet")} · Bestand ${num(item.current_stock)} · Tagesdosis ${num(item.daily_dose)} · leer am ${dateOnly(item.projected_empty_date)} · normaler Bestelltag ${dateOnly(item.normal_order_date)} · wirksamer Bestelltag ${dateOnly(item.effective_order_date)} · Packung ${num(item.pack_size)} · Kosten/Zuzahlung ${Number(item.pack_cost) > 0 ? `${num(item.pack_cost)} ${esc(plan.currency)}` : "nicht gepflegt"}${closure}</p></div></article>`;
     }).join("") || `<div class="inner centered">Aktuell ist keine Bestellung fällig.</div>`;
-    const costText = plan.cost_status === "complete" ? `Gesamtkosten bzw. Zuzahlung: ca. ${num(plan.cost_total)} ${esc(plan.currency)}` : plan.cost_status === "incomplete" ? "Kosten bzw. Zuzahlung konnten nicht vollständig ermittelt werden." : "Keine Kosten bzw. Zuzahlungen gepflegt.";
-    const orderActions = plan.items?.length ? `<article class="inner order-summary"><ha-icon icon="mdi:clipboard-text-outline"></ha-icon><div><strong>${costText}</strong><pre>${esc(plan.clipboard_text)}</pre><button class="secondary" type="button" data-action="copy-order"><ha-icon icon="mdi:content-copy"></ha-icon>Bestelltext in Zwischenablage kopieren</button></div></article>` : "";
-    const expiryItems = (profile.expiry_plan?.items || []).map((item) => `<article class="inner order-line"><ha-icon icon="mdi:calendar-alert"></ha-icon><div><strong>${esc(item.name)} · ${dateOnly(item.expiry_date)}</strong><p>${item.days_until_expiry < 0 ? `Seit ${days(Math.abs(item.days_until_expiry))} abgelaufen.` : item.days_until_expiry === 0 ? "Läuft heute ab." : `Noch ${days(item.days_until_expiry)}.`}</p></div></article>`).join("");
-    const notices = `${plan.items?.length ? this._section("Bestellvorschlag", "mdi:cart-arrow-down", `${orderItems}${orderActions}`, "inventory-notice") : ""}${expiryItems ? this._section("MHD-Hinweise", "mdi:calendar-alert", expiryItems, "inventory-notice") : ""}`;
-    return `<div class="grid two inventory">${notices}${this._section("Regelmäßige Medikation", "mdi:medical-bag", regular.map((med) => this._medLine(med, true, projections.get(med.id))).join("") || `<div class="inner centered">Keine aktiven regelmäßigen Medikamente vorhanden.</div>`)}${this._section("Bedarfsmedikation", "mdi:flask-plus-outline", prn.map((med) => this._medLine(med, false)).join("") || `<div class="inner centered">Keine aktiven Bedarfsmedikamente vorhanden.</div>`)}</div>`;
+    const pricedItems = filteredOrderItems.filter((item) => Number(item.pack_cost) > 0);
+    const costTotal = pricedItems.reduce((sum, item) => sum + Number(item.pack_cost), 0);
+    const costText = !pricedItems.length ? "Keine Kosten bzw. Zuzahlungen gepflegt."
+      : pricedItems.length === filteredOrderItems.length
+        ? `Gesamtkosten bzw. Zuzahlung: ca. ${num(costTotal)} ${esc(plan.currency)}`
+        : "Kosten bzw. Zuzahlung konnten nicht vollständig ermittelt werden.";
+    this._inventoryClipboardText = filteredOrderItems.map((item) => Number(item.pack_size) > 0 ? `${num(item.pack_size)} ${item.name}` : item.name).join("\n");
+    const orderActions = filteredOrderItems.length ? `<article class="inner order-summary"><ha-icon icon="mdi:clipboard-text-outline"></ha-icon><div><strong>${costText}</strong><pre>${esc(this._inventoryClipboardText)}</pre><button class="secondary" type="button" data-action="copy-order"><ha-icon icon="mdi:content-copy"></ha-icon>Bestelltext in Zwischenablage kopieren</button></div></article>` : "";
+    const medicationById = new Map([...(profile.regular_medications || []), ...(profile.as_needed_medications || [])].map((item) => [item.id, item]));
+    const expiryItems = (profile.expiry_plan?.items || []).filter((item) => doctorMatches(medicationById.get(item.medication_id) || item)).map((item) => `<article class="inner order-line"><ha-icon icon="mdi:calendar-alert"></ha-icon><div><strong>${esc(item.name)} · ${dateOnly(item.expiry_date)}</strong><p>${item.days_until_expiry < 0 ? `Seit ${days(Math.abs(item.days_until_expiry))} abgelaufen.` : item.days_until_expiry === 0 ? "Läuft heute ab." : `Noch ${days(item.days_until_expiry)}.`}</p></div></article>`).join("");
+    const notices = `${filteredOrderItems.length ? this._section("Bestellvorschlag", "mdi:cart-arrow-down", `${orderItems}${orderActions}`, "inventory-notice") : ""}${expiryItems ? this._section("MHD-Hinweise", "mdi:calendar-alert", expiryItems, "inventory-notice") : ""}`;
+    const doctorOptions = `<option value="">Alle Ärzte</option><option value="__none__" ${this._inventoryDoctor === "__none__" ? "selected" : ""}>Kein Arzt zugeordnet</option>${this._allDoctors().map((doctor) => `<option value="${esc(doctor.id)}" ${doctor.id === this._inventoryDoctor ? "selected" : ""}>${esc(doctor.name)}</option>`).join("")}`;
+    const filter = `<div class="inventory-doctor-filter"><label>Medikamentenplan nach Arzt filtern<select id="inventory-doctor">${doctorOptions}</select></label></div>`;
+    return `${filter}<div class="grid two inventory">${notices}${this._section("Regelmäßige Medikation", "mdi:medical-bag", regular.map((med) => this._medLine(med, true, projections.get(med.id))).join("") || `<div class="inner centered">Keine passenden aktiven regelmäßigen Medikamente vorhanden.</div>`)}${this._section("Bedarfsmedikation", "mdi:flask-plus-outline", prn.map((med) => this._medLine(med, false)).join("") || `<div class="inner centered">Keine passenden aktiven Bedarfsmedikamente vorhanden.</div>`)}</div>`;
   }
 
   _praxis(profile) {
@@ -1089,4 +1129,4 @@ class PillPalPanel extends HTMLElement {
   }
 }
 
-if (!customElements.get("pillpal-panel-5222")) customElements.define("pillpal-panel-5222", PillPalPanel);
+if (!customElements.get("pillpal-panel-5223")) customElements.define("pillpal-panel-5223", PillPalPanel);

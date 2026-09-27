@@ -24,7 +24,7 @@ try:
         SLOTS,
     )
 except ImportError:  # pragma: no cover - permits direct execution in simple tests
-    DATA_SCHEMA_VERSION = 11
+    DATA_SCHEMA_VERSION = 12
     DIAGNOSTIC_RETENTION_HOURS = 48
     SLOTS = ("morning", "noon", "evening", "night")
     SLOT_LABELS = {
@@ -1632,6 +1632,8 @@ def _repair_runtime_payload(
                     "quantity": decimal_json(quantity),
                     "unit_singular": str(raw_item.get("unit_singular", "Einheit")),
                     "unit_plural": str(raw_item.get("unit_plural", "Einheiten")),
+                    "doctor_id": str(raw_item.get("doctor_id", "")),
+                    "doctor_name": str(raw_item.get("doctor_name", "")),
                 }
             )
         if not repaired_items:
@@ -2652,6 +2654,12 @@ def book_as_needed(
         cycle_date=runtime.get("cycle_date"),
         medication_id=medication_id,
         medication_name=medication["name"],
+        doctor_id=str(medication.get("doctor_id", "")),
+        doctor_name=str(
+            profile.get("doctors", {})
+            .get(str(medication.get("doctor_id", "")), {})
+            .get("name", "")
+        ),
         quantity=decimal_json(amount),
         unit_singular=medication["unit_singular"],
         unit_plural=medication["unit_plural"],
@@ -2847,6 +2855,8 @@ def _desired_slot_items(profile: Mapping[str, Any], slot: str) -> list[dict[str,
         amount = decimal_value(medication.get("doses", {}).get(slot, 0))
         if amount <= 0:
             continue
+        doctor_id = str(medication.get("doctor_id", ""))
+        doctor = profile.get("doctors", {}).get(doctor_id, {}) if doctor_id else {}
         items.append(
             {
                 "medication_id": medication["id"],
@@ -2854,6 +2864,8 @@ def _desired_slot_items(profile: Mapping[str, Any], slot: str) -> list[dict[str,
                 "quantity": decimal_json(amount),
                 "unit_singular": medication["unit_singular"],
                 "unit_plural": medication["unit_plural"],
+                "doctor_id": doctor_id,
+                "doctor_name": str(doctor.get("name", "")),
             }
         )
     return sorted(items, key=lambda item: (item["name"].casefold(), item["medication_id"]))
@@ -2876,6 +2888,8 @@ def _history_medications(items: Iterable[Mapping[str, Any]]) -> list[dict[str, A
                 "quantity": decimal_json(raw.get("quantity", raw.get("dose", 0))),
                 "unit_singular": str(raw.get("unit_singular") or raw.get("unit") or "Einheit"),
                 "unit_plural": str(raw.get("unit_plural") or raw.get("unit") or "Einheiten"),
+                "doctor_id": str(raw.get("doctor_id", "")),
+                "doctor_name": str(raw.get("doctor_name", "")),
             }
         )
     return result
@@ -3351,6 +3365,13 @@ def _decrement_slot_medications(
                     item.get("unit_plural")
                     or medication.get("unit_plural")
                     or "Einheiten"
+                ),
+                "doctor_id": str(item.get("doctor_id", medication.get("doctor_id", ""))),
+                "doctor_name": str(
+                    item.get("doctor_name")
+                    or profile.get("doctors", {})
+                    .get(str(item.get("doctor_id") or medication.get("doctor_id", "")), {})
+                    .get("name", "")
                 ),
                 "stock_before": decimal_json(before),
                 "stock_after": medication["stock"],
@@ -4153,7 +4174,8 @@ def order_plan(profile: Mapping[str, Any], now: datetime | None = None) -> dict[
         included_ids.update(
             item["medication_id"]
             for item in projections
-            if date.fromisoformat(item["projected_empty_date"]) <= cutoff
+            if item.get("doctor_id") == anchor.get("doctor_id")
+            and date.fromisoformat(item["projected_empty_date"]) <= cutoff
         )
     items: list[dict[str, Any]] = []
     for projection in projections:
@@ -4367,8 +4389,32 @@ def slot_detail(
     }
 
 
+_UNASSIGNED_DOCTOR_FILTER = "__none__"
+
+
+def _statistics_doctor_matches(value: Any, doctor_id: str | None) -> bool:
+    if doctor_id is None:
+        return True
+    stored_id = str(value or "")
+    if doctor_id == _UNASSIGNED_DOCTOR_FILTER:
+        return not stored_id
+    return stored_id == doctor_id
+
+
+def _statistics_medication_matches(
+    item: Mapping[str, Any], medication_id: str | None, doctor_id: str | None
+) -> bool:
+    return (
+        (not medication_id or item.get("medication_id") == medication_id)
+        and _statistics_doctor_matches(item.get("doctor_id"), doctor_id)
+    )
+
+
 def _statistics_event_matches(
-    event: Mapping[str, Any], medication_id: str | None, slot: str | None
+    event: Mapping[str, Any],
+    medication_id: str | None,
+    slot: str | None,
+    doctor_id: str | None,
 ) -> bool:
     event_type = str(event.get("type", ""))
     is_prn = event_type == "as_needed"
@@ -4376,33 +4422,42 @@ def _statistics_event_matches(
         return False
     if slot and slot != "as_needed" and (is_prn or event.get("slot") != slot):
         return False
-    if not medication_id:
-        return event_type in {
-            "regular_taken",
-            "regular_skipped",
-            "regular_missed",
-            "as_needed",
-        }
+    if event_type not in {
+        "regular_taken",
+        "regular_skipped",
+        "regular_missed",
+        "as_needed",
+    }:
+        return False
     if is_prn:
-        return event.get("medication_id") == medication_id
+        return (
+            (not medication_id or event.get("medication_id") == medication_id)
+            and _statistics_doctor_matches(event.get("doctor_id"), doctor_id)
+        )
+    if not medication_id and doctor_id is None:
+        return True
     return any(
-        isinstance(item, Mapping) and item.get("medication_id") == medication_id
+        isinstance(item, Mapping)
+        and _statistics_medication_matches(item, medication_id, doctor_id)
         for item in event.get("medications", [])
     )
 
 
 def _statistics_slot_matches(
-    item: Mapping[str, Any], medication_id: str | None, slot: str | None
+    item: Mapping[str, Any],
+    medication_id: str | None,
+    slot: str | None,
+    doctor_id: str | None,
 ) -> bool:
     if slot == "as_needed":
         return False
     if slot and item.get("slot") != slot:
         return False
-    if not medication_id:
+    if not medication_id and doctor_id is None:
         return True
     return any(
         isinstance(medication, Mapping)
-        and medication.get("medication_id") == medication_id
+        and _statistics_medication_matches(medication, medication_id, doctor_id)
         for medication in item.get("medications", [])
     )
 
@@ -4413,6 +4468,7 @@ def statistics(
     now: datetime | None = None,
     *,
     medication_id: str | None = None,
+    doctor_id: str | None = None,
     slot: str | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
@@ -4436,7 +4492,7 @@ def statistics(
             continue
         if not period_start <= event_date <= period_end:
             continue
-        if _statistics_event_matches(event, medication_id, slot):
+        if _statistics_event_matches(event, medication_id, slot, doctor_id):
             events.append(deepcopy(event))
     slots_by_day: dict[str, dict[str, dict[str, Any]]] = {}
     history = profile.get("history", {})
@@ -4496,7 +4552,7 @@ def statistics(
         day_slots = [
             deepcopy(item)
             for item in slots_by_day.get(key, {}).values()
-            if _statistics_slot_matches(item, medication_id, slot)
+            if _statistics_slot_matches(item, medication_id, slot, doctor_id)
         ]
         day_slots.sort(key=lambda item: (str(item.get("due_at") or ""), str(item.get("slot"))))
         taken = sum(item.get("status") == "taken" for item in day_slots)
@@ -4535,8 +4591,9 @@ def statistics(
             medications = [
                 medication
                 for medication in item.get("medications", [])
-                if not medication_id
-                or medication.get("medication_id") == medication_id
+                if _statistics_medication_matches(
+                    medication, medication_id, doctor_id
+                )
             ]
             bookings.append(
                 {
@@ -4586,11 +4643,48 @@ def statistics(
                 "medication_id": med["id"],
                 "name": med.get("name", med["id"]),
                 "archived": bool(med.get("archived")),
+                "doctor_id": str(med.get("doctor_id", "")),
+                "doctor_name": str(
+                    profile.get("doctors", {})
+                    .get(str(med.get("doctor_id", "")), {})
+                    .get("name", "")
+                ),
             }
             for med in profile.get("medications", {}).values()
             if include_archived or not med.get("archived")
         ],
         key=lambda item: str(item["name"]).casefold(),
+    )
+    doctor_names: dict[str, str] = {
+        str(stored_id): str(doctor.get("name", stored_id))
+        for stored_id, doctor in profile.get("doctors", {}).items()
+    }
+
+    def remember_doctor(item: Mapping[str, Any]) -> None:
+        stored_id = str(item.get("doctor_id", ""))
+        if stored_id:
+            doctor_names.setdefault(
+                stored_id, str(item.get("doctor_name") or stored_id)
+            )
+
+    for medication in profile.get("medications", {}).values():
+        remember_doctor(medication)
+    for event in profile.get("events", []):
+        remember_doctor(event)
+        for medication in event.get("medications", []):
+            if isinstance(medication, Mapping):
+                remember_doctor(medication)
+    for day_slots in slots_by_day.values():
+        for history_slot in day_slots.values():
+            for medication in history_slot.get("medications", []):
+                if isinstance(medication, Mapping):
+                    remember_doctor(medication)
+    doctor_options = sorted(
+        [
+            {"doctor_id": stored_id, "name": name}
+            for stored_id, name in doctor_names.items()
+        ],
+        key=lambda item: item["name"].casefold(),
     )
     return {
         "days": (period_end - period_start).days + 1,
@@ -4598,6 +4692,7 @@ def statistics(
         "period_end": period_end.isoformat(),
         "selected_day": selected.isoformat(),
         "medication_id": medication_id,
+        "doctor_id": doctor_id,
         "slot": slot,
         "planned": planned_total,
         "taken": taken_total,
@@ -4617,6 +4712,7 @@ def statistics(
         "heatmap": heatmap,
         "day_details": daily.get(selected.isoformat(), {"date": selected.isoformat(), "events": []}),
         "available_medications": medication_options,
+        "available_doctors": doctor_options,
         "available_slots": [
             {"value": None, "label": "Alle Einnahmezeiten"},
             *[

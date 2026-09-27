@@ -263,6 +263,7 @@ async def _run_action(
                 if data.get("medication_id")
                 else None
             ),
+            doctor_id=(str(data["doctor_id"]) if data.get("doctor_id") else None),
             slot=_slot_value(data.get("slot")),
             start_date=_date_value(data.get("start_date")),
             end_date=_date_value(data.get("end_date")),
@@ -596,6 +597,7 @@ async def websocket_action(
         vol.Optional("admin_mode", default=False): bool,
         vol.Optional("days", default=7): int,
         vol.Optional("medication_id"): str,
+        vol.Optional("doctor_id"): str,
         vol.Optional("slot"): str,
         vol.Optional("start_date"): str,
         vol.Optional("end_date"): str,
@@ -628,6 +630,7 @@ async def websocket_statistics(
                 if msg.get("medication_id")
                 else None
             ),
+            doctor_id=(str(msg["doctor_id"]) if msg.get("doctor_id") else None),
             slot=_slot_value(msg.get("slot")),
             start_date=_date_value(msg.get("start_date")),
             end_date=_date_value(msg.get("end_date")),

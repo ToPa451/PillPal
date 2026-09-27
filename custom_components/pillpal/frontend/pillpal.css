@@ -450,3 +450,18 @@ th,td,.log-row{border-color:var(--line)}
   .stats .inner strong{font-size:12px}
   .stats .inner p{font-size:15px}
 }
+
+.inventory-doctor-filter{display:flex;justify-content:flex-end;margin:0 0 14px}
+.inventory-doctor-filter label{display:grid;gap:7px;width:min(100%,520px);color:var(--secondary-text-color)}
+@media(max-width:900px){
+  .page-praxis .manage-top{grid-template-columns:minmax(0,1fr) auto;align-items:center}
+  .page-praxis .manage-top>.actions{flex-wrap:nowrap}
+  .page-praxis .manage-top>.actions button{padding-inline:12px;white-space:nowrap}
+}
+@media(max-width:600px){
+  .page-praxis .doctor-closures .closure{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;flex-wrap:nowrap}
+  .page-praxis .doctor-closures .closure-remove{width:auto;margin-left:0;padding-inline:12px;white-space:nowrap}
+}
+@media(max-width:420px){
+  .page-praxis .manage-top>.actions button,.page-praxis .doctor-closures .closure-remove{padding-inline:9px}
+}
