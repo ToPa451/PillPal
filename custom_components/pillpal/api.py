@@ -227,8 +227,18 @@ async def _run_action(
             person_id, data.get("settings", data), actor=actor
         )
     if action == SERVICE_UPDATE_PRACTICE_CLOSURES:
+        closures = data.get("closures", [])
+        if not isinstance(closures, list) or not all(
+            isinstance(item, Mapping) for item in closures
+        ):
+            raise HomeAssistantError(
+                "closures muss eine Liste mit start/end-Objekten sein."
+            )
         return await manager.async_update_practice_closures(
-            person_id, list(data.get("closures", [])), actor=actor
+            person_id,
+            closures,
+            actor=actor,
+            replace_existing=bool(data.get("replace_existing", False)),
         )
     if action == SERVICE_SAVE_DOCTOR:
         doctor = data.get("doctor", data)

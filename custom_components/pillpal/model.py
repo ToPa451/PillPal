@@ -4554,7 +4554,7 @@ def statistics(
 def normalize_practice_closures(
     closures: Iterable[Mapping[str, Any]], today: date | None = None
 ) -> list[dict[str, str]]:
-    """Normalize closures and discard entries that already ended."""
+    """Normalize closures, discard expired entries and merge overlaps."""
 
     current_date = today or date.today()
     normalized: list[dict[str, str]] = []
@@ -4571,7 +4571,15 @@ def normalize_practice_closures(
         if end_date < current_date:
             continue
         normalized.append({"start": start_date.isoformat(), "end": end_date.isoformat()})
-    return sorted(normalized, key=lambda item: (item["start"], item["end"]))
+    normalized.sort(key=lambda item: (item["start"], item["end"]))
+    merged: list[dict[str, str]] = []
+    for item in normalized:
+        if not merged or item["start"] > merged[-1]["end"]:
+            merged.append(item)
+            continue
+        if item["end"] > merged[-1]["end"]:
+            merged[-1]["end"] = item["end"]
+    return merged
 
 
 def practice_status(profile: Mapping[str, Any], now: datetime | None = None) -> dict[str, Any]:

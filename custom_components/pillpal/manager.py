@@ -1762,13 +1762,21 @@ class PillPalManager:
         return result
 
     async def async_update_practice_closures(
-        self, person_id: str, closures: list[Mapping[str, Any]], *, actor: str | None
+        self,
+        person_id: str,
+        closures: list[Mapping[str, Any]],
+        *,
+        actor: str | None,
+        replace_existing: bool = False,
     ) -> list[dict[str, str]]:
         def operation() -> list[dict[str, str]]:
-            normalized = normalize_practice_closures(
-                closures, dt_util.now().date()
-            )
             profile = self.profile(person_id)
+            candidates = closures
+            if not replace_existing:
+                candidates = [*profile.get("practice_closures", []), *closures]
+            normalized = normalize_practice_closures(
+                candidates, dt_util.now().date()
+            )
             profile["practice_closures"] = normalized
             append_log(
                 profile,

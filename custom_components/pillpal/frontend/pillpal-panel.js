@@ -308,7 +308,7 @@ class PillPalPanel extends HTMLElement {
       const closures = (this._data.practice_closures || []).filter((_, itemIndex) => itemIndex !== index);
       if (!Number.isInteger(index) || index < 0 || index >= (this._data.practice_closures || []).length) return;
       if (!window.confirm("Diese Praxisschließung wirklich entfernen?")) return;
-      await this._call("update_practice_closures", { closures }, "Praxisschließung wird entfernt …", "Praxisschließung wurde entfernt.", "closure-form");
+      await this._call("update_practice_closures", { closures, replace_existing: true }, "Praxisschließung wird entfernt …", "Praxisschließung wurde entfernt.", "closure-form");
       return;
     }
     if (target.dataset.step) {
@@ -616,7 +616,7 @@ class PillPalPanel extends HTMLElement {
 
   async _saveClosure(form) {
     const raw = Object.fromEntries(new FormData(form).entries());
-    const closures = [...(this._data.practice_closures || []), { start: raw.start, end: raw.end || raw.start }];
+    const closures = [{ start: raw.start, end: raw.end || raw.start }];
     await this._call("update_practice_closures", { closures }, "Praxisschließung wird gespeichert …", "Praxisschließung wurde gespeichert.", "closure-form");
   }
 
