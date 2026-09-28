@@ -56,97 +56,215 @@ Pill★Pal is a Home Assistant–based medication manager optimized for mobile s
 2. Select the people to include and specify whether to start with an inactive example medication or empty. For individuals with their own login, assistance by administrators can optionally be allowed. Individuals without a login are automatically assisted.
 3. Open the personal dashboard **Pill★Pal** or, as an administrator, **Pill★Pal Assistance**. A Home Assistant restart is not required after the setup wizard; if your browser is already open, a single reload with `Ctrl+F5` may be necessary.
 
-## Dashboard and Navigation
+## User Manual
 
-The personal and administrative dashboards are registered by the integration itself; a Lovelace resource or additional dashboard YAML is not required. On narrow screens, the menu button in the Pill★Pal header opens the Home Assistant sidebar.
+### Open Pill★Pal and move around
 
-Horizontal swiping in open page areas natively switches between Pill★Pal pages. Gestures starting inside dropdowns, input fields, buttons, tables, logs, or the navigation bar are not interpreted as page switches. Therefore, the `hass-swipe-navigation` extension is not required for Pill★Pal.
+Pill★Pal adds its dashboards automatically; no Lovelace resource or dashboard YAML is required.
 
-Modified medication and settings forms can be completely reset to the permanently saved state using **Discard Changes**. When switching pages or medications, Pill★Pal prompts for confirmation before losing unsaved inputs. Feedback on saving, refilling, and archiving appears directly next to the triggered action; a rejection remains visible there along with the inputs that can still be corrected.
+- **Pill★Pal** is the personal dashboard. A signed-in user sees only the profile linked to their Home Assistant person.
+- **Pill★Pal Assistance** is available to administrators and contains only profiles for which assistance is enabled. Select the person you want to support before performing an action.
+- Use the navigation bar or swipe horizontally across an empty area of the page. Swipes that begin on controls, forms, tables, or the log do not change pages.
+- On a narrow screen, use the menu button in the Pill★Pal header to open the Home Assistant sidebar.
 
-In the Assistance Dashboard, every action is immutably bound to the person selected at the moment of clicking. Rapidly switching people cannot redirect an active action or its update to the new profile. Due intake slots appear above status and history in the mobile overview; in the log, system information is arranged above the longer event list.
+If a dashboard does not appear immediately after setup, reload the browser with `Ctrl+F5` or restart the Companion App.
 
-## Data and Access Model
+### Recommended first-time configuration
 
-- There is exactly one main integration entry and one subentry along with a logical device for each onboarded person.
-- Every write call to the backend requires a `person_id`. There is no globally selected profile.
-- A logged-in user exclusively sees their linked person.
-- The Admin Dashboard only lists people with admin assistance enabled and never the admin's own profile.
-- If an HA person is removed, their profile and history are preserved; their medications are archived.
-- A person created later can be added via **Add Entry** in the Pill★Pal integration entry.
+Complete these steps for each person before relying on reminders:
 
-## Data Security and Repair
+1. Open **Interfaces** and select a notification target, usually the person's `notify.mobile_app_…` service.
+2. Optionally select a next-alarm sensor, an awake helper, a collective-confirmation helper, a holiday calendar, and an intake calendar.
+3. Open **Times** and review the fixed fallback times, the fallback wake-up time, the early-intake window, snooze duration, and reminder interval.
+4. Open **Notifications** and adjust the message text and the Android or iOS notification behavior.
+5. Open **Practice** and add the person's doctors, including opening hours and known closures. This makes the doctors available for assignment while creating medication.
+6. Open **Manage** and add the person's medications and doses, assigning a previously created doctor where applicable.
+7. Check **Overview**. Pill★Pal warns you if regular medication has neither a notification target nor an enabled **Intake Due** entity as a reminder channel.
 
-Pill★Pal validates settings and stored profile, medication, cycle, and slot data before use. If a corrupted store is detected at startup, the integration first saves its unmodified contents separately under a quarantine ID. Only if this backup succeeds is a controlled, repaired state saved as the live store. The dashboard and person-specific log will subsequently indicate the quarantine. A newer schema that is not supported by this version will be quarantined, but neither downgraded nor overwritten. Unknown store, profile, medication, and runtime fields are not silently imported.
+Use **Save Changes** on each settings page. **Discard Changes** restores the last saved values. Pill★Pal asks before leaving a page or medication with unsaved changes.
 
-Notifications use the internal dashboard path registered by the integration.
+### Configure intake times
 
-A temporarily missing or incomplete Home Assistant person state deletes neither the profile nor the user link; complete subsequent events update the name and link. Listeners and background tasks are bound to their respective load cycle, ensuring that old callbacks execute no further changes after a reload or shutdown.
+The **Times** page controls when regular doses become due.
 
-The diagnostic export contains strictly structural, count, status, and configured-yes/no information: profile content for people, medications, entities, messages, logs, tokens, and quarantine is not exported.
+- **Fallback times** define reliable fixed times for morning, noon, evening, and night.
+- **Fallback wake-up time** starts a daily cycle when no awake helper is used.
+- A configured **awake helper** can start the daily cycle when the person gets up. The morning dose follows after the configured wake-up delay.
+- A configured **next-alarm sensor** dynamically derives morning, evening, and night times when its value falls inside the configured valid alarm window. Fixed times remain available as fallbacks.
+- **Allow intake before due** makes a dose bookable shortly before its due time.
+- **Snooze duration** sets the default postponement; **repeat interval** controls repeated reminders.
 
-Write operations are executed in a fixed revision-based sequence. Dashboard or service actions therefore only report success after successful persistent storage. If the commit fails, an error message is displayed and the unconfirmed change is rolled back in memory.
+After changing a time plan, save it and check the calculated times on **Overview**.
 
-### Backup, Restore, and Complete Removal
+### Add doctors and account for practice closures
 
-The authoritative backup is a full Home Assistant backup. Before upgrading or removing the integration, such a backup should be created and tested for restorability. Reloading or temporarily disabling the integration retains all application data. In contrast, confirming the **removal of the entire Pill★Pal integration entry** permanently deletes its live store and quarantine storage; recovery is then only possible from a previous Home Assistant backup. Removing only a person subentry continues to archive their application data and is not a complete deletion. Prior to archiving or full deletion, Pill★Pal cleans up all known profile-related mobile notifications. If a saved notify service is unavailable when a person is removed, the exact deletion job is preserved and retried once the service returns.
+Create the relevant doctors before adding medication so that every medication can be assigned correctly from the start. Use **Practice** to add a doctor, contact details, opening hours, and current or future closure periods.
 
-## Automation Entities and Actions
+When a holiday calendar is selected under **Interfaces**, Pill★Pal considers its events together with weekends, opening hours, and the assigned doctor's closures. If necessary, the effective reorder date is moved forward so that enough open practice days remain before stock is depleted. Medication without an assigned doctor does not use practice-specific closures.
 
-For each person, entities such as due status, next intake, adherence, reorders, and buttons for confirming, snoozing, and skipping are created. Additionally, services are available under `pillpal.*`. Services always expect a `person_id`, keeping automations unambiguous.
+A doctor cannot be deleted while medication is still assigned to them. Reassign or archive the affected medication first.
 
-`pillpal.adjust_stock` adjusts a medication's stock relatively. The delta must be non-zero, at most ±10,000, and a multiple of the specified minimum step size. An overly large negative correction is capped at 0 stock in a traceable manner. Event, log, and action results contain both requested and actually applied changes; success is returned only after persistent saving.
+### Add and manage medication
 
-## Medication Management and Buttons
+After creating the relevant doctors under **Practice**, open **Manage**, choose **New medication**, and complete the medication form.
 
-The minimum step size applies server-side to stock, package size, regular doses, maximum doses, refills, PRN (as-needed) logging, stock correction, and the amount per button press. The PRN dialog uses plus/minus steps exclusively; "Half" at 0.5 per button press remains explicitly supported.
+1. Enter a unique name and, optionally, a description. Select one of the doctors created on the **Practice** page, or leave the medication unassigned if no practice-specific planning is required.
+2. Choose the unit and the smallest allowed division. This division is used for doses, stock, refills, and as-needed quantities.
+3. Enter the package size, current stock, and optional cost or copayment.
+4. Enter a dose for every applicable time of day. Leave unused intake times at zero.
+5. If applicable, enable **As-needed intake**, set the maximum single and daily doses, and optionally select a button helper.
+6. If desired, enable expiration checking and enter the earliest expiration date in stock.
+7. Select **Save medication**.
 
-An expiration date can be entered from the previous year up to five years after the current year. The date field is visible only when expiration checking is enabled. Archived medications appear in the management selection only when the archive filter is active; a future open slot is restored after reactivation, whereas doses already in the past continue not to be retroactively created.
+Use **Refill** to add a delivery to the current stock and update its expiration date. Use **Archive** when a medication is no longer active. Archived medication remains in the history and can be shown in management or statistics through the relevant archive filter. Reactivating it restores future planning, but does not create doses retrospectively.
 
-A medication-specific input button confirms the matching regular slot first for a medication usable both regularly and PRN. Only pure PRN medications are logged as PRN via this button. Attribute changes and duplicate identical button events do not trigger a log entry. A rejected press is logged and briefly displayed on the mobile device with the reason and the next regular intake time.
+### Handle the daily medication routine
 
-## Notifications
+The **Overview** page groups due, early-bookable, upcoming, and past intakes. Each regular intake slot can be handled in one of three ways:
 
-A currently registered `notify.mobile_app_…` service can be selected directly as a notification target. Pill★Pal updates this selection upon later registration or removal of a service. A valid notify service **or** the active native person-specific entity **Intake Due** suffices as a reminder channel. A warning appears only if both channels are missing for regular medication; dashboard, entity, and log use the exact same logic.
+- **Confirm** records the dose as taken and deducts the planned amount from stock.
+- **Snooze** postpones the reminder by the configured duration. Snoozing again extends it.
+- **Skip** records the dose as skipped without changing stock.
 
-Critical reminders list each medication with a bullet point on its own line. Successful helper/button loggings receive a non-alarming 10-second mobile confirmation. Result and rejection messages after a companion action do not have a forced short display duration. Logging directly within the personal or administrative dashboard clears the alarm, but intentionally produces no additional mobile confirmation.
+The same actions are available in actionable mobile notifications when a notification target is configured. Old or already-used notification actions are rejected safely. If no action is taken before the cycle closes, the intake is recorded as missed.
 
-After `TAKE` or `SKIP` via a companion action, the feedback response states the next open intake slot or the complete daily cycle. If a subsequent slot is already due, its newly bound actions are directly available within this response. `SKIP` additionally confirms that stock remained unchanged. Upon automatically transitioning to "Missed", Pill★Pal stops repeating and clears the exact old slot notification.
+### Record as-needed medication
 
-If this feedback temporarily cannot be delivered after a successful application commit, the action still remains successful. Pill★Pal stores only the missing feedback side-effect and retries it later, even across a cycle change. The intake action itself is never repeated. Sent time, retry anchor, and the visible success log of a reminder are set only after a confirmed notify call.
+Open **As needed**, select a medication, adjust the amount with the available step buttons, and confirm the booking. Pill★Pal checks the smallest division, available stock, and configured maximum single and daily doses.
 
-The action identifier is bound not only to person, cycle, and slot, but also to the specific notify device using an opaque single-use token. After a target change, actions from old or copied notifications are clearly rejected without altering intake status or stock. After `SNOOZE`, `TAKE`, `SNOOZE`, and `SKIP` remain available in the persistent, non-alarming notification response. Re-snoozing extends the existing end time and binds all actions to a new single-use token.
+An optional medication-specific input button can also record an intake. If the medication has a regular dose due at that moment, the button confirms that regular dose first; a pure as-needed medication is recorded as an as-needed intake.
 
-If an open medication schedule or time plan changes, Pill★Pal removes an already visible old reminder before resending and rotates its action tokens. Explicit snooze accepts only an actually due or already snoozed slot from the current cycle. A repeated valid `TAKE` executes without a second stock deduction, but retries clearing the old notification. A temporarily missing notify service does not consume a reminder slot and is addressed immediately upon re-registration. The complete notification state is also reconciled once directly after startup or reload; a delivery merely reserved in the old process is not falsely considered delivered.
+### Monitor stock, orders, and expiration dates
 
-Upon an actual change of the notify target, Pill★Pal clears the old endpoint best-effort and publishes still-active intake, stock, and expiration notices to the new target. Stock alerts are saved as delivered only after successful transmission and react to any visible detail changes.
+The **Stock** page lists regular and as-needed medication, current stock, projected depletion dates, reorder suggestions, costs, and expiration warnings. You can filter the medication plan by doctor or show only medication without an assigned doctor.
 
-Reorder and expiration notices have distinct, person-specific titles. A single shared icon applies to all message types; Pill★Pal assigns technical tags stably internally and therefore does not offer them in the editor. Expiration dates appear with localized dates, a dedicated line per medication, and an indication of whether the preparation expires today, in how many days, or expired how many days ago.
+Pill★Pal estimates depletion from the current stock and regular daily dose. The lead times on **Times** determine when an order becomes due and which additional low-stock medication should be included in the same order. Review the generated order text before copying or sending it.
 
-## Reordering, Expiration, and Medical Practice Planning
+### Configure notifications and calendars
 
-For each active regular medication, Pill★Pal calculates the expected depletion date from current stock and daily dosage. This generates the standard order date and the effective order date. Medications can optionally be assigned to a stored doctor. If the standard date falls within a contiguous block of weekends, public holidays, or that doctor's practice closures, Pill★Pal checks whether enough actual opening days remain before depletion; otherwise, the reminder is advanced by the configured number of open practice days. Without a doctor assignment, no practice closure is applied.
+On **Notifications**, you can customize titles, action labels, the shared icon, and platform-specific behavior. Android options include channel, importance, priority, vibration, visibility, and persistence. iOS options include sound, interruption level, foreground presentation, volume, badge, and critical sound.
 
-The joint reorder window includes additional preparations whose depletion occurs shortly after an already due medication, but only when they belong to the same doctor (including the shared group without a doctor assignment). The reorder suggestion contains package sizes, costs/copayments, a copyable order text, and a warning if costs are incomplete. The same data is available as machine-readable attributes on the person-specific **Reorders** entity and within the dashboard. The medication-plan page can be filtered by doctor or specifically for medications without a doctor assignment; order and expiration notices follow the same filter.
+On **Interfaces**, you can connect:
 
-A connected holiday calendar is read ahead once daily as well as immediately following selection or state changes via `calendar.get_events`. A temporarily unsynchronized calendar is automatically fetched again without generating a diagnostic error or user warning. Technical details of successful fetches and real errors appear in the log, while the Practice page displays every doctor's compact status and manages active or future closure periods per doctor; past periods are no longer displayed or calculated. A doctor cannot be deleted while any medication still references it.
+- a mobile notify target for actionable reminders;
+- a next-alarm sensor for dynamic times;
+- an awake helper and confirmation helpers;
+- a holiday calendar for reorder planning; and
+- an intake calendar for completed, skipped, missed, and as-needed entries.
 
-## Statistics, History, and Diagnostic Log
+Changing the notify target moves active Pill★Pal notices to the new device where possible. Dashboard actions clear the related alarm but do not send an extra mobile confirmation.
 
-At the start of a daily cycle, Pill★Pal stores a domain snapshot for every scheduled slot containing cycle, target time, medication, assigned doctor, amount, and unit at that time. Pending status changes are updated until completion; completed historical slots are not rewritten by subsequent changes to schedule, name, doctor, or unit. Older data lacking such a snapshot is supplemented exclusively from its terminal events at that time, never from today's medication plan.
+### Review statistics and history
 
-Dashboard, native statistic entities, `pillpal.statistics`, and the read-only statistics WebSocket use the same model calculation. Timeframe, custom From/To dates, medication, doctor (including no assignment), intake time, and selected day filter metrics, heatmap, and daily list together. Daily details display the doctor captured at the time of the intake. In addition to planned, taken, skipped, and missed, pending intakes are also reported; PRN shows log count and total amount separately.
+The **Statistics** page shows planned, taken, skipped, missed, pending, and as-needed intakes as well as adherence. Filter the results by period, custom date range, medication, doctor, or intake time. Select a day in the heatmap to inspect its details.
 
-The person-specific diagnostic log contains all events from the last rolling 48 hours without a 500-entry cap. Changes to medications and settings state field, old value, and new value clearly. Rejected actions, technical errors, and uncaught errors from owner-bound background tasks are made visible in the appropriate Pill★Pal profile in addition to the Home Assistant system log.
+Completed historical entries retain the medication, amount, unit, and doctor recorded at that time. Later edits to a medication plan do not rewrite completed history. Archived medication can be included with the archive toggle.
 
-## Native Entities and Actions
+### Use Home Assistant entities and actions
 
-Each person profile provides four stable slot sensors for morning, noon, evening, and night alongside due status and next intake. Cycle ID and date, due time, loggability, snooze time, completion time, as well as medications, amounts, and units stem from the same profile state across all entities. A dedicated practice status entity details the reason and next open day. The adherence entity contains a 30-day history with a heatmap and daily details; planned, taken, skipped, missed, and PRN intakes are additionally provided as separate counters.
+Pill★Pal creates a separate Home Assistant device for each person. This allows dashboards and automations to use Pill★Pal data without reading the custom dashboard itself.
 
-Public actions select the Pill★Pal person profile as a device and display the four intake times with localized labels. Medication actions accept a unique visible medication name; technical IDs remain compatible for existing automations. Every action can return a machine-readable result and additionally updates the person-specific **Action Result** entity as well as the `pillpal_action_result` event with `pending`, `success`, or `error`. Single-use tokens are never published in the entity or event.
+#### Available sensors and controls
 
-`pillpal.statistics` supplies freely filterable timeframes, medications, doctors, intake times, heatmaps, and daily details as an action response. `pillpal.recalculate` forces a person-specific recalculation and retries failed intake calendar outputs. If an intake calendar is configured, confirmed, skipped, automatically missed, and PRN intakes generate exactly one structured calendar entry with medications in individual bullet points. Removing a person subentry cleans up only its entity and device registration entries; archived Pill★Pal application data is retained.
+| Entity | What it provides |
+| --- | --- |
+| **Status** | A summary of the person's current Pill★Pal state. |
+| **Next Intake** | The next planned intake and its time. |
+| **Morning**, **Noon**, **Evening**, and **Night Intake** | One stable sensor per regular slot. The state shows whether it is planned, pending, notified, snoozed, taken, skipped, missed, or not planned. Attributes include the calculated due time, medication, amounts, cycle, snooze time, and completion time where applicable. |
+| **Reorders** | Current reorder requirements and machine-readable details such as medication, doctor, stock, projected depletion, suggested order date, package size, and cost. |
+| **Expiry Alerts** | Medication currently inside the configured expiration-warning period. |
+| **Practice Status** | Whether the relevant practice is open or closed, the reason, and the next open day. |
+| **Adherence** | The calculated adherence value plus a 30-day history with daily details. |
+| **Last Activity** | The most recent recorded Pill★Pal activity for the person. |
+| **Action Result** | The state and details of the latest dashboard, script, or automation action: pending, success, or error. |
+| **Planned**, **Taken**, **Skipped**, **Missed**, and **As-needed Intake** statistics | Separate counters for use in dashboards and automations. These statistic entities are disabled by default and can be enabled from the Pill★Pal device page when needed. |
 
-## Beta Notice
+The **Intake Due** binary sensor turns on when action is required, while **Intake Possible** also covers doses inside the permitted early-intake window. **Daily Cycle Complete** indicates that all planned slots for the current cycle have reached a final state. **Reminder Configured** indicates whether the profile has a usable mobile notify target or an enabled **Intake Due** entity as its reminder channel.
 
-This release contains the architecture and the complete user interface. Prior to daily production use, it should be tested on a test instance with realistic person, notification, and automation configurations. Medication decisions must not rely exclusively on Home Assistant.
+The device also supplies buttons for **Confirm**, **Snooze**, and **Skip**. These operate on the currently relevant intake slot and are useful on Home Assistant dashboards. For more specific automation logic, use the actions below.
+
+#### Available actions
+
+Pill★Pal also provides actions under `pillpal.*`. They can be called manually from **Developer Tools → Actions**, used in scripts, or combined with triggers, conditions, templates, calendars, RSS data, and AI tasks in Home Assistant automations.
+
+| Purpose | Actions |
+| --- | --- |
+| Daily intake | `pillpal.confirm_slot`, `pillpal.snooze_slot`, `pillpal.skip_slot` |
+| As-needed medication | `pillpal.book_as_needed` |
+| Medication and stock | `pillpal.save_medication`, `pillpal.archive_medication`, `pillpal.reactivate_medication`, `pillpal.refill`, `pillpal.adjust_stock` |
+| Doctors and closures | `pillpal.save_doctor`, `pillpal.delete_doctor`, `pillpal.update_practice_closures` |
+| Settings and maintenance | `pillpal.update_settings`, `pillpal.recalculate`, `pillpal.acknowledge_errors`, `pillpal.clear_statistics` |
+| Reporting | `pillpal.statistics` |
+
+Always select the intended person's Pill★Pal device. Medication actions use the unique visible medication name, while doctor actions use the doctor ID displayed on the **Practice** page. Actions validate their input and report success only after the change has been saved. Results are returned to the calling script or automation where supported and are also published in the person's **Action Result** entity and in the `pillpal_action_result` event.
+
+#### Automation example: maintain practice closures from an RSS feed
+
+A Home Assistant automation can keep a doctor's closure periods up to date without entering every holiday manually. One possible workflow is:
+
+1. Run on a schedule or when the doctor's RSS entity changes.
+2. Read the latest entries from the RSS feed linked on the doctor's website.
+3. Pass only the relevant entry title, summary, publication date, and link to an AI task.
+4. Ask the AI task to return a strict list of objects with ISO dates, for example `[{"start": "2026-12-24", "end": "2027-01-03"}]`. Require an empty list when no unambiguous closure is stated; the model must not infer missing dates.
+5. Validate that every item contains real `YYYY-MM-DD` dates, that the end is not before the start, and that the source refers to the correct practice.
+6. Call `pillpal.update_practice_closures` with the person's Pill★Pal device, the doctor's ID, and the validated list in `closures`.
+
+Leave `replace_existing` disabled to add the detected periods to the stored list. Pill★Pal removes duplicates and merges overlapping periods. Enable `replace_existing` only if the feed is an authoritative complete list and the automation should also remove closures that are no longer returned. For AI-generated data, it is advisable to require manual approval before replacement and to keep the RSS link in the automation trace for verification.
+
+The same pattern can automate refills from a stock helper, retrieve filtered adherence data with `pillpal.statistics`, or trigger `pillpal.recalculate` after an external calendar or helper has been updated.
+
+### Add or assist another person
+
+To add a Home Assistant person created after the initial setup, open **Settings → Devices & Services → Pill★Pal** and select **Add Entry**. Each person receives a separate profile and device.
+
+People with their own Home Assistant login normally manage only their own profile. Administrators see a profile in **Pill★Pal Assistance** only when assistance is enabled for that person. People without a linked login are always assisted.
+
+### Diagnose a problem
+
+Open **Log & Info** to see the Pill★Pal version, profile ID, recent actions, rejected input, configuration changes, and diagnostic errors for the selected person. Correct the indicated setting and use **Recalculate Pill★Pal** from Home Assistant's action interface when you need to refresh schedules, stock planning, practice data, or failed calendar output.
+
+If you report a bug, include the integration version, the relevant log message, and a Home Assistant diagnostic download. The diagnostic export contains structural status and counts, but not profile content, medication details, messages, logs, or action tokens.
+
+### Back up, update, or remove Pill★Pal
+
+Create and test a full Home Assistant backup before updating or removing the integration. Reloading or temporarily disabling Pill★Pal keeps its data.
+
+Removing a single person subentry removes that person's entities and device registration while preserving and archiving their Pill★Pal application data. Removing the entire Pill★Pal integration entry permanently deletes the live store and quarantine storage. Recovery is then possible only from an earlier Home Assistant backup.
+
+## FAQ
+
+### Is Pill★Pal a substitute for medical advice?
+
+Pill★Pal is not a substitute for medical advice. Dosage and treatment decisions must not be based solely on this integration.
+
+### Can I integrate my iOS alarm?
+
+Yes. See [Sync iOS 26 Sleep Alarm to HA Companion App (2026.7)](https://community.home-assistant.io/t/sync-ios-26-sleep-alarm-to-ha-companion-app-2026-7/1019713).
+
+### Why do I not receive reminders?
+
+For regular medication, configure a valid mobile notify target under **Interfaces** or enable the person's **Intake Due** entity and use it in your own automation. Also verify the medication's doses, the calculated schedule on **Overview**, and any errors under **Log & Info**.
+
+### Why does Pill★Pal use a different time from my phone alarm?
+
+The alarm must be exposed to Home Assistant as a sensor, selected under **Interfaces**, and fall within the valid alarm window configured under **Times**. Otherwise, Pill★Pal uses the fixed fallback schedule.
+
+### Does skipping a dose reduce the stock?
+
+No. **Skip** records the intake as skipped and leaves stock unchanged. **Confirm** and successful as-needed bookings reduce stock.
+
+### Can I correct or delete a completed intake?
+
+Editing completed dose history is not currently supported. Check the **Upcoming Features** section for planned functionality.
+
+### Can an administrator manage medication for another person?
+
+Yes, when admin assistance is enabled for that person's profile. People without their own linked Home Assistant login are always assisted.
+
+### What happens when I archive a medication?
+
+It is removed from active planning but retained for history and statistics. You can display archived medication with the archive filters and reactivate it later.
+
+### How do I preserve my data before an update or removal?
+
+Create a full Home Assistant backup and verify that it can be restored. Deleting the entire integration entry permanently removes Pill★Pal's active and quarantined data.
