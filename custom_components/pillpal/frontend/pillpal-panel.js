@@ -137,6 +137,8 @@ class PillPalPanel extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this._catchGame?.dispose();
+    this._catchGame = null;
     this._connected = false;
     this._unsubscribe?.();
     this._unsubscribe = null;
@@ -299,6 +301,23 @@ class PillPalPanel extends HTMLElement {
   }
 
   async _click(event) {
+    if (event.target.closest('[data-action="pill-catch"]')) {
+      if (this._catchLoading) return;
+      this._catchLoading = true;
+      try {
+        const { PillCatch } = await import('/pillpal_static_523b6/pillpal-catch.js?v=1');
+        if (!this._connected) return;
+        if (!this._catchGame?.isConnected) {
+          this._catchGame = new PillCatch();
+          this._catchGame.restoreFocus = () => this.shadowRoot.querySelector('[data-action="pill-catch"]')?.focus();
+          document.body.append(this._catchGame);
+        }
+        this._catchGame.open(this._data.profile);
+      } catch (err) {
+        this._setFeedback('error', `Pill★Catch konnte nicht geladen werden: ${err.message}`);
+      } finally { this._catchLoading = false; }
+      return;
+    }
     const target = event.target.closest("[data-page],[data-action],[data-step],[data-adjust],[data-med],[data-stats-date],[data-closure-remove]");
     if (!target) return;
     if (target.dataset.page) {
@@ -825,15 +844,16 @@ class PillPalPanel extends HTMLElement {
   }
 
   _renderLoading() {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b5/pillpal.css?v=523b5"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b6/pillpal.css?v=523b6"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
   }
 
   _renderFatal(err) {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b5/pillpal.css?v=523b5"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b6/pillpal.css?v=523b6"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
   }
 
   _render() {
     if (!this._data) return;
+    this._catchGame?.profileChanged(this._data.profile);
     const previousList = this.shadowRoot.querySelector(".intake-list");
     const openIntakes = new Set([...this.shadowRoot.querySelectorAll("details.intake-entry[open]")].map((item) => item.dataset.intakeId));
     const scrollPositions = [];
@@ -852,12 +872,12 @@ class PillPalPanel extends HTMLElement {
       const text = this._adminMode
         ? "Es gibt keine Person, deren Profil du als Administrator betreuen darfst."
         : "Dein Home-Assistant-Benutzer ist keiner aufgenommenen Person zugeordnet.";
-      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b5/pillpal.css?v=523b5"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
+      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b6/pillpal.css?v=523b6"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
       return;
     }
     const meta = PAGE_META[this._page];
     const markup = `
-      <link rel="stylesheet" href="/pillpal_static_523b5/pillpal.css?v=523b5">
+      <link rel="stylesheet" href="/pillpal_static_523b6/pillpal.css?v=523b6">
       <style>:host{--accent:${meta[1]}}</style>
       <main class="app page-${this._page} ${this.hass?.themes?.darkMode ? "theme-dark" : "theme-light"}">
         <header class="mobile-toolbar"><ha-menu-button></ha-menu-button><strong>Pill★Pal · ${meta[0]}</strong></header>
@@ -1251,8 +1271,8 @@ class PillPalPanel extends HTMLElement {
     const logBody = `<div class="log-scroll">${rows || `<p class="muted">Noch keine Einträge.</p>`}</div>`;
     const logSection = this._section("Diagnoseereignisse", "mdi:text-box-search-outline", logBody);
     const clearSection = `<section class="section log-clear"><button type="button" class="secondary" data-action="clear-statistics"><ha-icon icon="mdi:delete-sweep-outline"></ha-icon>Statistikdaten löschen</button></section>`;
-    return `<div class="grid two log-grid">${this._section("Systeminformation", "mdi:folder-information-outline", `<article class="inner"><ha-icon icon="mdi:folder-information-outline"></ha-icon><div><strong>${brand(true)}-Version</strong><p>Revision ${esc(this._data.version)} · Datenschema ${esc(profile.schema || 1)}</p><small>Profil-ID: ${esc(profile.person_id)}</small></div></article>`)}<div class="log-column">${logSection}${clearSection}</div></div>`;
+    return `<div class="grid two log-grid">${this._section("Systeminformation", "mdi:folder-information-outline", `<article class="inner"><ha-icon icon="mdi:folder-information-outline"></ha-icon><div><strong>${brand(true)}-Version</strong><p><button class="version-trigger" data-action="pill-catch">Revision ${esc(this._data.version)}</button> · Datenschema ${esc(profile.schema || 1)}</p><small>Profil-ID: ${esc(profile.person_id)}</small></div></article>`)}<div class="log-column">${logSection}${clearSection}</div></div>`;
   }
 }
 
-if (!customElements.get("pillpal-panel-523b5")) customElements.define("pillpal-panel-523b5", PillPalPanel);
+if (!customElements.get("pillpal-panel-523b6")) customElements.define("pillpal-panel-523b6", PillPalPanel);

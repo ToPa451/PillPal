@@ -9,11 +9,14 @@ The statistics refresh regression test requires Node.js, the `playwright` packag
 ```sh
 node tests/test_statistics_refresh.cjs
 node tests/test_time_plans.cjs
+node tests/test_pill_catch.cjs
 ```
 
 Set `PLAYWRIGHT_CHANNEL=msedge` to use an installed Microsoft Edge browser instead of Playwright Chromium. If Playwright is installed outside the project, set `NODE_PATH` to its parent package directory.
 
 The browser test serves the production frontend locally and simulates Home Assistant websocket responses and update events. It checks both mobile and desktop layouts, including a scrolling ancestor inside a shadow root. It does not connect to a running Home Assistant instance.
+
+The Pill★Catch browser test covers immutable profile snapshots, archived/PRN exclusions, stable IDs, 1–20 targets, duplicate removal, fair spawning, catches at the deadline, slot transitions and subsequent days, mouse dragging, keyboard controls, pause/resume, browser Back, profile changes, visibility changes, storage denial, demo mode, glass contents and layout at 320–1000 px. It also asserts that the game sends no write requests. `PILLPAL_SCREENSHOTS` saves light/dark screenshots. A real phone in Home Assistant still needs a manual touch and safe-area check.
 
 The time-plan browser test covers adding, editing, disabling, removing, discarding and saving plans, first-time holiday initialization and retained values, background refresh protection, dashboard sources and overflow at 360, 390, 768 and 1440 px. Set `PILLPAL_SCREENSHOTS` to an output directory to capture the plan forms.
 
