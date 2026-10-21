@@ -70,6 +70,7 @@ const profile = { person_id: 'person.test', name: 'Example', settings: {}, medic
       await entry.waitFor();
       await entry.locator('summary').click();
       await entry.scrollIntoViewIfNeeded();
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       await page.evaluate(() => {
         window.previousEntry = panel.shadowRoot.querySelector('details.intake-entry');
         window.previousTop = scroller.scrollTop;
@@ -83,7 +84,8 @@ const profile = { person_id: 'person.test', name: 'Example', settings: {}, medic
       for (let i = 0; i < 3; i++) await refresh();
       assert.equal(await entry.getAttribute('open'), '');
       assert.equal(await page.evaluate(() => previousEntry === panel.shadowRoot.querySelector('details.intake-entry')), true);
-      assert.ok(await page.evaluate(() => Math.abs(scroller.scrollTop - previousTop) <= 1));
+      assert.ok(await page.evaluate(() => Math.abs(scroller.scrollTop - previousTop) <= 1),
+        JSON.stringify(await page.evaluate(() => ({previousTop, currentTop: scroller.scrollTop, height:scroller.scrollHeight, viewport:scroller.clientHeight}))));
 
       // A real update must appear without closing the editor or moving the viewport.
       await page.evaluate(() => {
@@ -96,7 +98,8 @@ const profile = { person_id: 'person.test', name: 'Example', settings: {}, medic
       assert.equal(await entry.getAttribute('open'), '');
       assert.match(await entry.locator('summary').innerText(), /Übersprungen/);
       assert.equal(await entry.locator('[data-status="taken"]').getAttribute('data-revision'), 'revision-1');
-      assert.ok(await page.evaluate(() => Math.abs(scroller.scrollTop - previousTop) <= 1));
+      assert.ok(await page.evaluate(() => Math.abs(scroller.scrollTop - previousTop) <= 1),
+        JSON.stringify(await page.evaluate(() => ({previousTop, currentTop: scroller.scrollTop, height:scroller.scrollHeight, viewport:scroller.clientHeight}))));
 
       // Failures preserve the expanded entry; recovery clears the error.
       await page.evaluate(() => { window.failStatistics = true; });
@@ -117,8 +120,35 @@ const profile = { person_id: 'person.test', name: 'Example', settings: {}, medic
       await entry.locator('summary').click();
       await page.evaluate(() => { panel._data.selected_person_id = 'person.other'; panel._render(); });
       assert.equal(await entry.getAttribute('open'), null);
+
+      // PRN bookings expose discard only, including after background refreshes.
+      await page.evaluate(() => {
+        panel._data.selected_person_id = 'person.test';
+        Object.assign(nextStatistics.day_details.events[0], {
+          slot_id: 'as_needed:prn-1', intake_kind: 'as_needed', slot: null,
+          status: 'taken', type: 'as_needed', original_status: 'taken',
+          corrected: false, correction_id: '', corrected_at: null,
+        });
+      });
+      await refresh();
+      await entry.locator('summary').click();
+      assert.equal(await entry.locator('.intake-actions button').count(), 1);
+      assert.equal(await entry.locator('.intake-actions button').innerText(), 'Verwerfen');
+      await page.evaluate(() => { panel._call = async (action, data) => { window.prnAction = {action, data}; return {status:'discarded'}; }; });
+      await entry.locator('.intake-actions button').click();
+      assert.deepEqual(await page.evaluate(() => prnAction), {
+        action: 'correct_intake', data: {intake_id:'as_needed:prn-1', status:'discarded', expected_revision:''},
+      });
+      await page.evaluate(() => Object.assign(nextStatistics.day_details.events[0], {
+        status: 'discarded', type: 'as_needed_discarded', corrected: true, correction_id: 'prn-revision',
+      }));
+      await refresh();
+      assert.equal(await entry.getAttribute('open'), '');
+      assert.equal(await entry.locator('.intake-actions button').count(), 0);
+      assert.match(await entry.locator('summary').innerText(), /Bedarf · Verworfen \*/);
+      assert.equal(await entry.locator('.intake-summary').evaluate(node => getComputedStyle(node).textDecorationLine), 'line-through');
       assert.deepEqual(errors, []);
-      console.log(`PASS ${width}px: unchanged and changed event refreshes, scroll position, revisions, errors, collapse and context isolation`);
+      console.log(`PASS ${width}px: statistics refresh state and PRN discard-only actions, payload, audit and strikethrough`);
       await page.close();
     }
   } finally {

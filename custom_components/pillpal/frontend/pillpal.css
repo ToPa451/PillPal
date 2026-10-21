@@ -467,6 +467,7 @@ th,td,.log-row{border-color:var(--line)}
 }
 
 /* Historical corrections share the statistics page colours and card spacing. */
+.page-statistik{overflow-anchor:none}
 .intake-list{display:grid;gap:10px}.intake-list>.intake-entry{margin:0}.intake-entry{display:block;padding:0;min-width:0;overflow-wrap:anywhere}
 .intake-entry>summary{display:flex;align-items:center;gap:12px;cursor:pointer;list-style:none;padding:16px;min-height:56px}
 .intake-entry>summary::-webkit-details-marker{display:none}.intake-entry>summary:focus-visible{outline:2px solid var(--accent);outline-offset:-3px;border-radius:var(--small-radius)}

@@ -158,9 +158,11 @@ The **Statistics** page shows planned, taken, skipped, missed, pending, and as-n
 
 Completed historical entries retain the medication, amount, unit, and doctor recorded at that time. Later edits to a medication plan do not rewrite completed history. Archived medication can be included with the archive toggle.
 
-Starting with **5.2.3-beta1**, tap a completed regular intake in **Bookings and planning** to correct the entire intake time, including all its medications. Taken, skipped, and automatically missed intakes can be marked taken, skipped, or discarded, including older entries selected through the date filters. As-needed bookings are excluded from this feature.
+Starting with **5.2.3-beta1**, tap a completed regular intake in **Bookings and planning** to correct the entire intake time, including all its medications. Taken, skipped, and automatically missed intakes can be marked taken, skipped, or discarded, including older entries selected through the date filters.
 
-Corrected entries show `*` and retain their original state and last correction time in the expanded card. Only discarded entries are struck through. Discarding excludes an intake from all statistical counts and adherence calculations, while keeping it visible. Expand it again to restore it as taken or skipped.
+Starting with **5.2.3-beta3**, as-needed bookings can also be expanded and discarded. Discard is their only correction action; they cannot be marked skipped or restored. Discarding credits the historical stock debit and excludes the booking from statistics, the heatmap, today's as-needed total, and the daily maximum-dose calculation. The original booking remains visible with strikethrough and a `*` marker. Existing as-needed bookings can use their recorded historical quantity when explicit stock debit fields are unavailable.
+
+Corrected entries show `*` and retain their original state and last correction time in the expanded card. Only discarded entries are struck through. Discarding excludes an intake from all statistical counts and adherence calculations, while keeping it visible. A discarded regular intake can be expanded again and restored as taken or skipped.
 
 Stock changes use the original quantities and units. A correction either saves the stock and history together or rejects the entire change. Insufficient stock, changed units, missing medication, or legacy taken entries without a recorded stock debit produce an explanatory error. Corrections never reopen reminders. If another surface has already changed the entry, reload the statistics and review its new state before retrying.
 
@@ -260,7 +262,7 @@ No. **Skip** records the intake as skipped and leaves stock unchanged. **Confirm
 
 ### Can I correct or delete a completed intake?
 
-In **5.2.3-beta1**, open **Statistics**, select the original day, and tap the completed regular intake under **Bookings and planning**. Choose the appropriate correction. This updates the stock and statistics together and keeps an audit trail. See **Review statistics and history** for details and limitations.
+In **5.2.3-beta1**, open **Statistics**, select the original day, and tap the completed regular intake under **Bookings and planning**. Choose the appropriate correction. Starting with **5.2.3-beta3**, as-needed bookings can also be discarded. This updates the stock and statistics together and keeps an audit trail. See **Review statistics and history** for details and limitations.
 
 ### Can an administrator manage medication for another person?
 

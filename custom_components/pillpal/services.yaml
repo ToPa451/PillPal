@@ -1,9 +1,9 @@
 correct_intake:
   name: Abgeschlossene Einnahme korrigieren
-  description: Korrigiert einen vollständigen regulären Einnahmezeitpunkt und dessen historischen Bestandsabzug. Öffnet keine neue Erinnerung.
+  description: Korrigiert einen vollständigen regulären Einnahmezeitpunkt oder verwirft eine Bedarfsbuchung mit historischer Bestandskorrektur. Öffnet keine neue Erinnerung.
   fields:
     person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
-    intake_id: {name: Historische slot_id aus der Statistik, required: true, selector: {text: {}}}
+    intake_id: {name: Historische slot_id aus der Statistik (regulär oder Bedarf), required: true, selector: {text: {}}}
     expected_revision: {name: Aktuelle correction_id (leer bei unkorrigiertem Eintrag), required: true, selector: {text: {}}}
     status:
       name: Zielzustand

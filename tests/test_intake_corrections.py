@@ -196,7 +196,7 @@ class IntakeCorrectionTests(unittest.TestCase):
             self.correct("taken")
         self.assertEqual(before, self.profile)
 
-    def test_unknown_and_prn_entries_are_rejected(self):
+    def test_unknown_entries_are_rejected(self):
         for intake_id in ("", "other:morning", "as_needed"):
             with self.assertRaises(model.PillPalError):
                 model.correct_intake(self.profile, intake_id, "taken", "", now=NOW)

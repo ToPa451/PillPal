@@ -834,17 +834,23 @@ def clear_statistics(
 ) -> dict[str, Any]:
     """Erase every accumulated statistics event and daily history entry.
 
-    Today's as-needed bookings are kept so the daily maximum-dose safety
+    Today's as-needed bookings and their corrections are kept so the daily maximum-dose safety
     check (which sums today's as-needed events) keeps working correctly for
     the remainder of the current day.
     """
 
     profile = get_profile(store, person_id)
     today = _local_now(now).date().isoformat()
+    retained_prn_ids = {
+        f"as_needed:{event.get('id')}" for event in profile.get("events", [])
+        if event.get("type") == "as_needed" and event.get("date") == today
+    }
     profile["events"] = [
         event
         for event in profile.get("events", [])
-        if event.get("type") == "as_needed" and event.get("date") == today
+        if (event.get("type") == "as_needed" and event.get("date") == today)
+        or (event.get("type") == "intake_correction"
+            and event.get("intake_id") in retained_prn_ids)
     ]
     profile["history"] = {"daily": {}}
     timestamp = iso_now(now)
@@ -2541,7 +2547,7 @@ def book_as_needed(
         raise PillPalError("Der Bestand reicht für diese Buchung nicht aus.")
     today_total = sum(
         decimal_value(event.get("quantity", 0))
-        for event in profile.get("events", [])
+        for event in effective_as_needed_events(profile)
         if event.get("type") == "as_needed"
         and event.get("medication_id") == medication_id
         and event.get("date") == current.date().isoformat()
@@ -2666,6 +2672,8 @@ def book_as_needed(
         source=source,
         actor=actor or "",
         maximum_override=maximum_override,
+        stock_before=decimal_json(before),
+        stock_after=medication["stock"],
     )
     if maximum_override:
         add_event(
@@ -4335,15 +4343,22 @@ def correct_intake(
     *, actor: str | None = None, actor_user_id: str | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Validate the entire stock delta before appending a historical correction."""
+    """Correct regular intakes or discard PRN bookings after validating stock."""
     if status not in {"taken", "skipped", "discarded"}:
         raise PillPalError("Ungültiger Zielzustand für die Korrektur.")
     original = None
+    prn_event = next((event for event in profile.get("events", [])
+                      if event.get("type") == "as_needed"
+                      and f"as_needed:{event.get('id')}" == intake_id), None)
+    if prn_event:
+        if status != "discarded":
+            raise PillPalError("Bedarfsbuchungen können ausschließlich verworfen werden.")
+        original = effective_as_needed(prn_event, {})
     for day in profile.get("history", {}).get("daily", {}).values():
         if intake_id in day.get("slots", {}):
             original = day["slots"][intake_id]
             break
-    terminal_event = None
+    terminal_event = prn_event
     for event in profile.get("events", []):
         if event.get("type") not in {"regular_taken", "regular_skipped", "regular_missed"}:
             continue
@@ -4364,10 +4379,16 @@ def correct_intake(
     medications = deepcopy(original.get("medications", []))
     # A taken event records the actual debit, including its historical units.
     if original["status"] == "taken":
-        booked = (terminal_event or {}).get("medications", [])
-        if not booked or any("stock_before" not in m or "stock_after" not in m for m in booked):
+        booked = original["medications"] if prn_event else (terminal_event or {}).get("medications", [])
+        if not prn_event and (not booked or any("stock_before" not in m or "stock_after" not in m for m in booked)):
             raise PillPalError("Die ursprüngliche Bestandsabbuchung ist für diesen Alt-Eintrag nicht eindeutig gespeichert. Korrektur nicht möglich.")
-        medications = [{**m, "quantity": decimal_json(decimal_value(m["stock_before"]) - decimal_value(m["stock_after"]))} for m in booked]
+        medications = [
+            {**m, "quantity": decimal_json(
+                decimal_value(m["stock_before"]) - decimal_value(m["stock_after"])
+                if "stock_before" in m and "stock_after" in m
+                else decimal_value(m["quantity"])
+            )} for m in booked
+        ]
     delta_sign = int(current["status"] == "taken") - int(status == "taken")
     amounts: dict[str, Decimal] = {}
     for item in medications:
@@ -4410,6 +4431,34 @@ def correct_intake(
         source="manual_correction", actor=actor, now=now,
     )
     return {"status": status, "intake_id": intake_id, "correction_id": correction["id"]}
+
+
+def effective_as_needed(event: Mapping[str, Any], corrections: Mapping[str, Any]) -> dict[str, Any]:
+    """Project a PRN booking using its stable event id and historical medication."""
+    medication = {
+        "medication_id": event.get("medication_id"),
+        "name": event.get("medication_name") or event.get("medication_id"),
+        "quantity": event.get("quantity", 0),
+        "unit_singular": event.get("unit_singular"),
+        "unit_plural": event.get("unit_plural"),
+        "doctor_id": event.get("doctor_id", ""),
+        "doctor_name": event.get("doctor_name", ""),
+    }
+    for key in ("stock_before", "stock_after"):
+        if key in event:
+            medication[key] = event[key]
+    result = effective_intake({**event, "slot_id": f"as_needed:{event.get('id')}",
+                               "status": "taken", "intake_kind": "as_needed",
+                               "medications": [medication]}, corrections)
+    result["type"] = "as_needed_discarded" if result["status"] == "discarded" else "as_needed"
+    return result
+
+
+def effective_as_needed_events(profile: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Share the effective PRN state across statistics, dose limits and display."""
+    corrections = intake_corrections(profile)
+    return [effective_as_needed(event, corrections)
+            for event in profile.get("events", []) if event.get("type") == "as_needed"]
 
 
 _SLOT_STATUS_LABELS = {
@@ -4591,6 +4640,7 @@ def statistics(
     if selected < period_start or selected > period_end:
         selected = period_end
     events = []
+    corrections = intake_corrections(profile)
     for event in profile.get("events", []):
         try:
             event_date = date.fromisoformat(str(event.get("date")))
@@ -4599,7 +4649,8 @@ def statistics(
         if not period_start <= event_date <= period_end:
             continue
         if _statistics_event_matches(event, medication_id, slot, doctor_id):
-            events.append(deepcopy(event))
+            events.append(effective_as_needed(event, corrections)
+                          if event.get("type") == "as_needed" else deepcopy(event))
     slots_by_day: dict[str, dict[str, dict[str, Any]]] = {}
     history = profile.get("history", {})
     daily_history = history.get("daily", {}) if isinstance(history, Mapping) else {}
@@ -4717,7 +4768,11 @@ def statistics(
                     "all_medications": deepcopy(item.get("medications", [])),
                 }
             )
-        bookings.extend(deepcopy(prn))
+        bookings.extend(deepcopy([
+            event for event in events
+            if event.get("date") == key
+            and event.get("type") in {"as_needed", "as_needed_discarded"}
+        ]))
         bookings.sort(key=lambda item: str(item.get("timestamp") or ""))
         additional_as_needed = bool(prn and planned and slot is None)
         values = {
@@ -5011,6 +5066,10 @@ def snapshot(profile: Mapping[str, Any], now: datetime | None = None) -> dict[st
 
     current = _local_now(now)
     result = deepcopy(dict(profile))
+    corrections = intake_corrections(profile)
+    result["events"] = [effective_as_needed(event, corrections)
+                        if event.get("type") == "as_needed" else event
+                        for event in result.get("events", [])]
     result.pop("history", None)
     cutoff = current - timedelta(hours=DIAGNOSTIC_RETENTION_HOURS)
     result["log"] = [
