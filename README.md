@@ -7,14 +7,28 @@ Pill★Pal is a Home Assistant–based medication manager optimized for mobile s
 - User-based management with individual medication plans, schedules, and notifications
 - Flexible intake times calculated dynamically from wake-up helpers and the smartphone alarm set for waking up the next day
 - Flexible schedules and dosage plans for multiple medications
+- Individual weekday time plans with optional holiday times
 - Actionable notifications to mark doses as taken, snooze them, or skip them
 - Automatic tracking of pending, taken, skipped, and missed doses
 - Inventory monitoring with alerts for low stock and approaching expiration dates
 - Timely refill reminders that take medical practice closure periods into account
 - A central dashboard showing upcoming and past intakes with additional statistics
-- Correction of completed regular intake history with stock adjustment (5.2.3-beta1)
+- Audited corrections of completed regular intakes and discarding of as-needed bookings with stock adjustment
 - Support for as-needed medication and configurable safety limits
 - Optional admin-assisted medication intake
+
+## What's new in 5.2.3
+
+- Correct completed regular intakes as taken, skipped, or discarded from **Statistics**, with stock and statistics updated together and an audit trail retained. Discarded regular intakes can be restored.
+- Discard incorrect as-needed bookings, refunding their historical stock debit and updating statistics and daily-limit calculations.
+- Create weekday time plans with optional holiday parameters. The selected plan and its time sources are shown on **Overview**; existing settings migrate automatically to the Standard plan.
+- Statistics correction forms and scrolling remain stable during background refreshes. Adding time plans also works over local HTTP connections.
+
+### Update to 5.2.3
+
+Create a Home Assistant backup, download **5.2.3** in HACS, and restart Home Assistant. Then reload the Pill★Pal dashboard or restart the Companion App to load the updated frontend. When updating from a 5.2.3 beta, select the stable **5.2.3** release in HACS.
+
+Data schema **13** preserves existing medication, stock, history, and settings. Time-plan edits apply to the next cycle; an already started cycle keeps its saved parameters. See **Configure intake times** and **Review statistics and history** below for details.
 
 # Upcoming Features
 
@@ -33,7 +47,7 @@ Pill★Pal is a Home Assistant–based medication manager optimized for mobile s
 - At least one person created under **Settings → People**
 - HACS installed for convenient installation and updates
 
-## Installation for Testing
+## Installation
 
 ### Option 1: Via HACS (Recommended)
 
@@ -152,7 +166,7 @@ On **Interfaces**, you can connect:
 - a mobile notify target for actionable reminders;
 - a next-alarm sensor for dynamic times;
 - an awake helper and confirmation helpers;
-- a holiday calendar for reorder planning; and
+- a holiday calendar for time plans and reorder planning; and
 - an intake calendar for completed, skipped, missed, and as-needed entries.
 
 Changing the notify target moves active Pill★Pal notices to the new device where possible. Dashboard actions clear the related alarm but do not send an extra mobile confirmation.
@@ -163,9 +177,9 @@ The **Statistics** page shows planned, taken, skipped, missed, pending, and as-n
 
 Completed historical entries retain the medication, amount, unit, and doctor recorded at that time. Later edits to a medication plan do not rewrite completed history. Archived medication can be included with the archive toggle.
 
-Starting with **5.2.3-beta1**, tap a completed regular intake in **Bookings and planning** to correct the entire intake time, including all its medications. Taken, skipped, and automatically missed intakes can be marked taken, skipped, or discarded, including older entries selected through the date filters.
+Tap a completed regular intake in **Bookings and planning** to correct the entire intake time, including all its medications. Taken, skipped, and automatically missed intakes can be marked taken, skipped, or discarded, including older entries selected through the date filters.
 
-Starting with **5.2.3-beta3**, as-needed bookings can also be expanded and discarded. Discard is their only correction action; they cannot be marked skipped or restored. Discarding credits the historical stock debit and excludes the booking from statistics, the heatmap, today's as-needed total, and the daily maximum-dose calculation. The original booking remains visible with strikethrough and a `*` marker. Existing as-needed bookings can use their recorded historical quantity when explicit stock debit fields are unavailable.
+As-needed bookings can also be expanded and discarded. Discard is their only correction action; they cannot be marked skipped or restored. Discarding credits the historical stock debit and excludes the booking from statistics, the heatmap, today's as-needed total, and the daily maximum-dose calculation. The original booking remains visible with strikethrough and a `*` marker. Existing as-needed bookings can use their recorded historical quantity when explicit stock debit fields are unavailable.
 
 Corrected entries show `*` and retain their original state and last correction time in the expanded card. Only discarded entries are struck through. Discarding excludes an intake from all statistical counts and adherence calculations, while keeping it visible. A discarded regular intake can be expanded again and restored as taken or skipped.
 
@@ -201,7 +215,7 @@ Pill★Pal also provides actions under `pillpal.*`. They can be called manually 
 | Purpose | Actions |
 | --- | --- |
 | Daily intake | `pillpal.confirm_slot`, `pillpal.snooze_slot`, `pillpal.skip_slot` |
-| Historical correction (5.2.3-beta1) | `pillpal.correct_intake` with `intake_id` (`slot_id`), target `status`, and `expected_revision` (current `correction_id`, initially an empty string) from `pillpal.statistics` day details |
+| Historical correction | `pillpal.correct_intake` with `intake_id` (`slot_id`), target `status`, and `expected_revision` (current `correction_id`, initially an empty string) from `pillpal.statistics` day details |
 | As-needed medication | `pillpal.book_as_needed` |
 | Medication and stock | `pillpal.save_medication`, `pillpal.archive_medication`, `pillpal.reactivate_medication`, `pillpal.refill`, `pillpal.adjust_stock` |
 | Doctors and closures | `pillpal.save_doctor`, `pillpal.delete_doctor`, `pillpal.update_practice_closures` |
@@ -267,7 +281,7 @@ No. **Skip** records the intake as skipped and leaves stock unchanged. **Confirm
 
 ### Can I correct or delete a completed intake?
 
-In **5.2.3-beta1**, open **Statistics**, select the original day, and tap the completed regular intake under **Bookings and planning**. Choose the appropriate correction. Starting with **5.2.3-beta3**, as-needed bookings can also be discarded. This updates the stock and statistics together and keeps an audit trail. See **Review statistics and history** for details and limitations.
+Open **Statistics**, select the original day, and tap the completed regular intake under **Bookings and planning**. Choose the appropriate correction. As-needed bookings can also be discarded. This updates the stock and statistics together and keeps an audit trail. See **Review statistics and history** for details and limitations.
 
 ### Can an administrator manage medication for another person?
 
