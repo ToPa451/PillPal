@@ -478,3 +478,14 @@ article.intake-entry{padding:16px}.intake-summary time,.intake-doctor,.intake-hi
 .intake-actions{display:flex;flex-wrap:wrap;gap:8px}.intake-actions button{min-height:48px;white-space:normal;text-align:left}
 .intake-hint{font-size:13px;line-height:1.5}.intake-editor p{line-height:1.5}
 @media(max-width:900px){.intake-summary{grid-template-columns:minmax(0,1fr);gap:5px}.intake-summary time{font-size:12px}.intake-doctor{font-size:13px}.intake-entry>summary,article.intake-entry{padding:12px}.intake-actions{display:grid;grid-template-columns:minmax(0,1fr)}.intake-editor{padding:0 12px 12px}.intake-summary .stats-medications{margin:2px 0}}
+#time-plans { grid-column: 1 / -1; display: grid; gap: 16px; min-width: 0; }
+.time-plan { display: block; min-width: 0; scroll-margin-top: 64px; }
+.time-plan summary { cursor: pointer; overflow-wrap: anywhere; }
+.plan-editor { display: grid; gap: 16px; padding-top: 16px; min-width: 0; }
+.plan-values { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 16px; min-width: 0; }
+.plan-values[hidden] { display: none; }
+.plan-values label, .plan-editor > label { min-width: 0; }
+.plan-values input, .plan-editor > label input { width: 100%; min-width: 0; box-sizing: border-box; }
+.plan-weekdays { display: flex; flex-wrap: wrap; gap: 12px; min-width: 0; border: 1px solid var(--divider-color); border-radius: 12px; padding: 12px; }
+.plan-weekdays .check { display: flex; align-items: center; gap: 6px; }
+.time-plan :focus-visible { outline: 2px solid var(--primary-color); outline-offset: 3px; }

@@ -24,7 +24,7 @@ try:
         SLOTS,
     )
 except ImportError:  # pragma: no cover - permits direct execution in simple tests
-    DATA_SCHEMA_VERSION = 12
+    DATA_SCHEMA_VERSION = 13
     DIAGNOSTIC_RETENTION_HOURS = 48
     SLOTS = ("morning", "noon", "evening", "night")
     SLOT_LABELS = {
@@ -350,6 +350,114 @@ def _validated_setting(key: str, value: Any) -> Any:
     return value
 
 
+PLAN_DEFAULTS = {
+    "wake_time": "08:00", "morning_delay_minutes": 15,
+    "lunch_window_from": "12:00", "lunch_window_to": "14:00",
+    "evening": "20:00", "night": "23:00",
+}
+LEGACY_PLAN_KEYS = {"fallback_wake_time", "morning_delay_minutes", "lunch_window_from", "lunch_window_to", "times"}
+
+
+def standard_time_plan(settings: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """Build the migration default from the previously effective parameters."""
+    settings = settings or {}
+    values = deepcopy(PLAN_DEFAULTS)
+    values["wake_time"] = settings.get("fallback_wake_time", values["wake_time"])
+    for key in ("morning_delay_minutes", "lunch_window_from", "lunch_window_to"):
+        values[key] = settings.get(key, values[key])
+    for key in ("evening", "night"):
+        values[key] = settings.get("times", {}).get(key, values[key])
+    return {"id": "standard", "name": "Standard", "enabled": True,
+            "weekdays": list(range(7)), "normal": values,
+            "holiday_enabled": False, "holiday_initialized": False, "holiday": deepcopy(values)}
+
+
+DEFAULT_SETTINGS["time_plans"] = [standard_time_plan()]
+
+
+def validate_plan_values(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping) or set(value) != set(PLAN_DEFAULTS):
+        raise PillPalError("Zeitplan: Alle sechs Zeitparameter müssen angegeben werden.")
+    result = {}
+    for key, raw in value.items():
+        result[key] = (_validated_setting(key, raw) if key == "morning_delay_minutes"
+                       else _validated_time_setting(key, raw))
+    if result["lunch_window_from"] > result["lunch_window_to"]:
+        raise PillPalError("Mittagsfenster: Von darf nicht nach Bis liegen.")
+    return result
+
+
+def validate_time_plans(plans: Any) -> list[dict[str, Any]]:
+    if not isinstance(plans, list) or not plans or len(plans) > 100:
+        raise PillPalError("Zeitpläne müssen eine Liste mit einem Standard enthalten (maximal 100).")
+    result, ids, occupied = [], set(), {}
+    for raw in plans:
+        if not isinstance(raw, Mapping):
+            raise PillPalError("Zeitplaneintrag muss ein Objekt sein.")
+        plan = deepcopy(dict(raw))
+        plan_id = plan.get("id")
+        if not isinstance(plan_id, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", plan_id) or plan_id in ids:
+            raise PillPalError("Zeitplan-IDs müssen eindeutig und gültig sein.")
+        ids.add(plan_id)
+        name = plan.get("name")
+        if not isinstance(name, str) or not name.strip() or len(name) > 100:
+            raise PillPalError("Zeitplan benötigt einen Namen (maximal 100 Zeichen).")
+        plan["name"] = name.strip()
+        for key in ("enabled", "holiday_enabled"):
+            if not isinstance(plan.get(key), bool):
+                raise PillPalError(f"{name}: {key} muss wahr oder falsch sein.")
+        days = plan.get("weekdays")
+        if not isinstance(days, list) or not days or any(type(day) is not int or not 0 <= day <= 6 for day in days) or len(set(days)) != len(days):
+            raise PillPalError(f"{name}: Mindestens einen eindeutigen Wochentag von 0 bis 6 wählen.")
+        if plan_id == "standard":
+            if not plan["enabled"] or set(days) != set(range(7)):
+                raise PillPalError("Standard muss aktiv sein und alle sieben Tage enthalten.")
+        elif plan["enabled"]:
+            for day in days:
+                if day in occupied:
+                    label = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")[day]
+                    raise PillPalError(f"{label}: Zeitpläne {occupied[day]} und {name} überschneiden sich.")
+                occupied[day] = name
+        plan["normal"] = validate_plan_values(plan.get("normal"))
+        if plan["holiday_enabled"] and "holiday" not in plan:
+            raise PillPalError(f"{name}: Aktivierte Feiertagszeiten müssen vollständig angegeben werden.")
+        plan["holiday"] = validate_plan_values(plan.get("holiday", plan["normal"]))
+        initialized = plan.get("holiday_initialized", "holiday" in raw)
+        if type(initialized) is not bool:
+            raise PillPalError(f"{name}: Feiertagsinitialisierung ist ungültig.")
+        plan["holiday_initialized"] = initialized or plan["holiday_enabled"]
+        result.append({key: plan[key] for key in ("id", "name", "enabled", "weekdays", "normal", "holiday_enabled", "holiday", "holiday_initialized")})
+    if "standard" not in ids:
+        raise PillPalError("Standard-Zeitplan fehlt.")
+    return result
+
+
+def resolve_time_plan(settings: Mapping[str, Any], cycle_date: date, *, is_holiday: bool) -> dict[str, Any]:
+    """Resolve a person-local plan without HA access or shared mutable values."""
+    plans = settings.get("time_plans") or [standard_time_plan(settings)]
+    selected = next(plan for plan in plans if plan["id"] == "standard")
+    for plan in plans:
+        if plan["id"] != "standard" and plan["enabled"] and cycle_date.weekday() in plan["weekdays"]:
+            selected = plan
+            break
+    holiday = bool(is_holiday and selected["holiday_enabled"])
+    return {"plan_id": selected["id"], "plan_name": selected["name"],
+            "cycle_date": cycle_date.isoformat(), "is_holiday": bool(is_holiday),
+            "holiday_applied": holiday,
+            "values": deepcopy(selected["holiday"] if holiday else selected["normal"])}
+
+
+def cycle_time_plan(profile: Mapping[str, Any], cycle_date: date, *, today: date | None = None) -> dict[str, Any]:
+    """Use only cache entries belonging to the configured holiday calendar."""
+    settings, runtime = profile.get("settings", {}), profile.get("runtime", {})
+    entity = settings.get("holiday_calendar")
+    forecast = runtime.get("holiday_calendar_forecast", {})
+    holiday = bool(entity and forecast.get("entity_id") == entity and cycle_date.isoformat() in forecast.get("closed_dates", []))
+    if entity and cycle_date == today and runtime.get("holiday_calendar_active"):
+        holiday = True
+    return resolve_time_plan(settings, cycle_date, is_holiday=holiday)
+
+
 def normalize_settings(settings: Mapping[str, Any]) -> dict[str, Any]:
     """Strictly validate the complete settings object against known fields."""
 
@@ -362,6 +470,9 @@ def normalize_settings(settings: Mapping[str, Any]) -> dict[str, Any]:
         )
     result = deepcopy(DEFAULT_SETTINGS)
     for key, value in settings.items():
+        if key == "time_plans":
+            result[key] = validate_time_plans(value)
+            continue
         if key == "times":
             if not isinstance(value, Mapping):
                 raise PillPalError("times muss ein Objekt sein.")
@@ -377,6 +488,10 @@ def normalize_settings(settings: Mapping[str, Any]) -> dict[str, Any]:
                 )
             continue
         result[key] = _validated_setting(key, value)
+    if "time_plans" not in settings:
+        result["time_plans"] = validate_time_plans([standard_time_plan(result)])
+    for key in LEGACY_PLAN_KEYS:
+        result.pop(key, None)
     return result
 
 
@@ -384,10 +499,12 @@ def repair_settings(settings: Any) -> tuple[dict[str, Any], list[str]]:
     """Repair persisted settings field-by-field and report every discarded value."""
 
     if not isinstance(settings, Mapping):
-        return deepcopy(DEFAULT_SETTINGS), ["settings ist kein Objekt"]
+        return normalize_settings({}), ["settings ist kein Objekt"]
     candidate: dict[str, Any] = {}
     reasons: list[str] = []
     for key, value in settings.items():
+        if key == "time_plans":
+            continue
         if key in _LEGACY_SETTINGS:
             continue
         if key not in DEFAULT_SETTINGS:
@@ -413,6 +530,24 @@ def repair_settings(settings: Any) -> tuple[dict[str, Any], list[str]]:
             candidate[key] = _validated_setting(key, value)
         except PillPalError as err:
             reasons.append(str(err))
+    if candidate.get("lunch_window_from", "12:00") > candidate.get("lunch_window_to", "14:00"):
+        reasons.append("Ungültiges altes Mittagsfenster wurde auf 12:00–14:00 repariert")
+        candidate.update(lunch_window_from="12:00", lunch_window_to="14:00")
+    if "time_plans" in settings:
+        plans = settings["time_plans"]
+        repaired = []
+        if not isinstance(plans, list):
+            reasons.append("time_plans ist keine Liste")
+            plans = []
+        # Repair the standard first; a broken additional entry never discards it.
+        for raw in sorted(plans, key=lambda item: 0 if isinstance(item, Mapping) and item.get("id") == "standard" else 1):
+            try:
+                base = repaired or [standard_time_plan(candidate)]
+                trial = [raw] if isinstance(raw, Mapping) and raw.get("id") == "standard" and not repaired else [*base, raw]
+                repaired = validate_time_plans(trial)
+            except PillPalError as err:
+                reasons.append(f"Zeitplan verworfen: {err}")
+        candidate["time_plans"] = repaired or [standard_time_plan(candidate)]
     return normalize_settings(candidate), reasons
 
 
@@ -447,6 +582,7 @@ def _new_runtime() -> dict[str, Any]:
         "last_cycle_completed": False,
         "fallback_wake_last_started_date": None,
         "schedule_source": None,
+        "time_plan_snapshot": None,
         "effective_due_at": {},
         "slots": {},
         "last_activity": "Pill★Pal wurde eingerichtet.",
@@ -535,6 +671,14 @@ def _migrate_runtime(profile: dict[str, Any]) -> dict[str, Any]:
             item["notification_reservation_id"] = None
         normalized_slots[slot] = item
     runtime["slots"] = normalized_slots
+    if runtime.get("cycle_started_at") and not runtime.get("time_plan_snapshot"):
+        cycle_date = datetime.fromisoformat(runtime["cycle_started_at"]).date()
+        # Existing cycles retain their old effective values and slots.
+        runtime["time_plan_snapshot"] = resolve_time_plan(profile.get("settings", {}), cycle_date, is_holiday=False)
+        runtime["effective_due_at"] = {
+            **{slot: item["due_at"] for slot, item in normalized_slots.items() if item.get("due_at")},
+            **runtime.get("effective_due_at", {}),
+        }
     pending = runtime.get("pending_max_dose_confirmations")
     runtime["pending_max_dose_confirmations"] = (
         deepcopy(dict(pending)) if isinstance(pending, Mapping) else {}
@@ -606,7 +750,7 @@ def new_profile(
         "created_at": timestamp,
         "updated_at": timestamp,
         "notification_defaults_migrated_at": timestamp,
-        "settings": deepcopy(DEFAULT_SETTINGS),
+        "settings": normalize_settings({}),
         "practice_closures": [],
         "medications": {},
         "doctors": {},
@@ -1274,6 +1418,21 @@ def _repair_runtime_payload(
         if key in value:
             runtime[key] = deepcopy(value[key])
 
+    snapshot = runtime.get("time_plan_snapshot")
+    if snapshot is not None:
+        try:
+            if not isinstance(snapshot, Mapping):
+                raise PillPalError("Snapshot muss ein Objekt sein.")
+            date.fromisoformat(snapshot["cycle_date"])
+            if not all(isinstance(snapshot.get(key), str) and snapshot[key] for key in ("plan_id", "plan_name")):
+                raise PillPalError("Snapshot benötigt Plan-ID und Namen.")
+            if any(type(snapshot.get(key)) is not bool for key in ("is_holiday", "holiday_applied")):
+                raise PillPalError("Snapshot benötigt Feiertagsentscheidung.")
+            runtime["time_plan_snapshot"] = {**snapshot, "values": validate_plan_values(snapshot.get("values"))}
+        except (PillPalError, ValueError, KeyError, TypeError) as err:
+            reasons.append(f"{path}.time_plan_snapshot ist ungültig: {err}")
+            runtime["time_plan_snapshot"] = None
+
     state = runtime.get("cycle_state")
     if not isinstance(state, str) or state not in {"inactive", "active", "ended"}:
         reasons.append(f"{path}.cycle_state ist ungültig")
@@ -1335,9 +1494,7 @@ def _repair_runtime_payload(
                 reasons.append(f"{path}.effective_due_at.{slot} ist ungültig")
                 continue
             parsed_effective[str(slot)] = parsed
-        runtime["effective_due_at"] = (
-            parsed_effective if set(parsed_effective) == set(SLOTS) else {}
-        )
+        runtime["effective_due_at"] = parsed_effective
 
     if not isinstance(runtime.get("last_reminder"), Mapping):
         reasons.append(f"{path}.last_reminder ist kein Objekt")
@@ -2190,6 +2347,7 @@ def validate_store_payload(
             path=f"profiles.{person_id}.runtime",
         )
         profile["runtime"] = runtime
+        _migrate_runtime(profile)
         profile_reasons.extend(runtime_reasons)
         _migrate_terminal_event_history(profile)
         _sync_cycle_history(profile)
@@ -2997,7 +3155,9 @@ def calculate_cycle_schedule(
         except (TypeError, ValueError):
             pass
 
-    times = settings.get("times", {})
+    snapshot = runtime.get("time_plan_snapshot") or cycle_time_plan(profile, cycle_started_at.date())
+    values = snapshot["values"]
+    times = values
     next_alarm_raw = runtime.get("next_alarm_at")
     next_alarm: datetime | None = None
     if next_alarm_raw:
@@ -3007,10 +3167,10 @@ def calculate_cycle_schedule(
             window_end = parse_time(str(settings.get("alarm_window_to", "11:00")))
             if (
                 candidate > cycle_started_at
-                and candidate.date() == cycle_started_at.date() + timedelta(days=1)
-                and window_start <= candidate.time() <= window_end
+                and candidate.astimezone(cycle_started_at.tzinfo).date() == cycle_started_at.date() + timedelta(days=1)
+                and window_start <= candidate.astimezone(cycle_started_at.tzinfo).time() <= window_end
             ):
-                next_alarm = candidate
+                next_alarm = candidate.astimezone(cycle_started_at.tzinfo)
         except (TypeError, ValueError):
             next_alarm = None
 
@@ -3039,30 +3199,40 @@ def calculate_cycle_schedule(
             night_time,
             cycle_started_at.tzinfo,
         )
-        source = "Fallback-Zeiten"
+        source = "Zeitplan"
+
+    if evening < cycle_started_at or night < cycle_started_at:
+        raise PillPalError("Abend-/Nachtzeit liegt vor dem Zyklusstart. Bitte Zeitplan oder Wecker prüfen.")
 
     lunch_candidate = cycle_started_at + (evening - cycle_started_at) / 2
     lunch_start = datetime.combine(
         cycle_started_at.date(),
-        parse_time(str(settings.get("lunch_window_from", "12:00"))),
+        parse_time(str(values.get("lunch_window_from", "12:00"))),
         cycle_started_at.tzinfo,
     )
     lunch_end = datetime.combine(
         cycle_started_at.date(),
-        parse_time(str(settings.get("lunch_window_to", "14:00"))),
+        parse_time(str(values.get("lunch_window_to", "14:00"))),
         cycle_started_at.tzinfo,
     )
     noon = max(lunch_start, min(lunch_candidate, lunch_end))
-    morning = cycle_started_at + timedelta(
-        minutes=max(0, min(120, int(settings.get("morning_delay_minutes", 15))))
-    )
-    return {
+    morning = (cycle_started_at.astimezone(timezone.utc) + timedelta(
+        minutes=max(0, min(120, int(values.get("morning_delay_minutes", 15))))
+    )).astimezone(cycle_started_at.tzinfo)
+    calculated = {
         "morning": morning,
         "noon": noon,
         "evening": evening,
         "night": night,
         "source": source,
     }
+    for slot in SLOTS:
+        if explicit.get(slot):
+            try:
+                calculated[slot] = datetime.fromisoformat(str(explicit[slot]))
+            except (TypeError, ValueError):
+                pass
+    return calculated
 
 
 def _base_slot(cycle_id: str, slot: str, due: datetime, items: list[dict[str, Any]]) -> dict[str, Any]:
@@ -3098,6 +3268,7 @@ def start_cycle(
     now: datetime | None = None,
     *,
     started_by: str,
+    time_plan: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Start exactly one fachlicher cycle for a person."""
 
@@ -3124,6 +3295,9 @@ def start_cycle(
         "pending_notification_feedback",
         "pending_notification_cleanup",
         "intake_calendar_deliveries",
+        "holiday_calendar_forecast",
+        "holiday_calendar_active",
+        "holiday_calendar_message",
     }:
         runtime[key] = deepcopy(previous.get(key, {}))
     runtime["last_action_result"] = deepcopy(
@@ -3140,6 +3314,9 @@ def start_cycle(
     runtime["last_cycle_completed"] = False
     runtime["next_alarm_at"] = previous.get("next_alarm_at")
     runtime["schedule_source"] = previous.get("schedule_source")
+    runtime["time_plan_snapshot"] = deepcopy(time_plan) if time_plan is not None else cycle_time_plan(profile, current.date())
+    # Check the selected parameters before replacing the existing runtime.
+    calculate_cycle_schedule({"settings": profile.get("settings", {}), "runtime": runtime}, current)
     if started_by == "fallback_time":
         runtime["fallback_wake_last_started_date"] = current.date().isoformat()
     profile["runtime"] = runtime
@@ -3259,7 +3436,7 @@ def rebuild_schedule(
         if previous_status in {"pending", "notified"}:
             previous["status"] = "planned"
         previous_due = datetime.fromisoformat(str(previous.get("due_at")))
-        if force or expected_due > current:
+        if force or (previous_due > current and expected_due > current):
             semantic_change = (
                 previous_due != expected_due or previous.get("items", []) != desired
             )
@@ -3805,14 +3982,35 @@ def update_settings(
 ) -> dict[str, Any]:
     """Update one person's settings."""
 
-    profile = get_profile(store, person_id)
+    original = get_profile(store, person_id)
+    profile = deepcopy(original)
     if not isinstance(updates, Mapping):
         raise PillPalError("Einstellungsänderungen müssen ein Objekt sein.")
     before = deepcopy(profile.get("settings", {}))
     merged = deep_merge(before, updates)
+    legacy_updates = set(updates) & LEGACY_PLAN_KEYS
+    if legacy_updates and "time_plans" in updates:
+        raise PillPalError("Alte Zeitfelder und Zeitpläne dürfen nicht gemeinsam geändert werden.")
+    if legacy_updates:
+        plans = deepcopy(before.get("time_plans") or [standard_time_plan(before)])
+        standard = next(plan for plan in plans if plan["id"] == "standard")
+        mapped = {"fallback_wake_time": "wake_time", "morning_delay_minutes": "morning_delay_minutes", "lunch_window_from": "lunch_window_from", "lunch_window_to": "lunch_window_to"}
+        for key in legacy_updates - {"times"}:
+            standard["normal"][mapped[key]] = updates[key]
+        if "times" in updates:
+            times = updates["times"]
+            if not isinstance(times, Mapping) or set(times) - {"evening", "night"}:
+                raise PillPalError("Morgen und Mittag werden berechnet. Bitte Zeitplanparameter verwenden.")
+            standard["normal"].update(times)
+        merged["time_plans"] = plans
+        for key in LEGACY_PLAN_KEYS:
+            merged.pop(key, None)
     validated = normalize_settings(merged)
+    _migrate_runtime(profile)
     profile["settings"] = validated
-    profile.setdefault("runtime", {})["effective_due_at"] = {}
+    if before.get("holiday_calendar") != validated.get("holiday_calendar"):
+        profile["runtime"]["holiday_calendar_forecast"] = _new_runtime()["holiday_calendar_forecast"]
+        profile["runtime"]["holiday_calendar_active"] = False
     rebuild_schedule(profile, now=now)
     append_log(
         profile,
@@ -3830,8 +4028,26 @@ def update_settings(
         source="settings",
         actor=actor,
         now=now,
-        ignored=set(),
+        ignored={"time_plans"},
     )
+    old_plans = {plan["id"]: plan for plan in before.get("time_plans", [])}
+    new_plans = {plan["id"]: plan for plan in validated["time_plans"]}
+    for plan_id in dict.fromkeys([*old_plans, *new_plans]):
+        old, new = old_plans.get(plan_id), new_plans.get(plan_id)
+        if old == new:
+            continue
+        if old is None or new is None:
+            append_log(profile, f"Zeitplan {(new or old)['name']} {'hinzugefügt' if new else 'entfernt'}.", source="settings", actor=actor, now=now)
+        else:
+            labels = {"name": "Name", "enabled": "Aktiv", "weekdays": "Wochentage", "holiday_enabled": "Feiertagszeiten aktiv",
+                      **{f"{kind}.{key}": f"{'Normal' if kind == 'normal' else 'Feiertag'}: {label}"
+                         for kind in ("normal", "holiday") for key, label in {
+                             "wake_time": "Aufstehzeit", "morning_delay_minutes": "Morgenverzögerung",
+                             "lunch_window_from": "Mittagsfenster von", "lunch_window_to": "Mittagsfenster bis",
+                             "evening": "Abends", "night": "Zur Nacht"}.items()}}
+            _append_change_log(profile, old, new, labels, subject=f"Zeitplan {new['name']}", source="settings", actor=actor, now=now, ignored={"holiday_initialized"})
+    original.clear()
+    original.update(profile)
     return deepcopy(profile["settings"])
 
 

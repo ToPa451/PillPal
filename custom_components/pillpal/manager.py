@@ -56,6 +56,8 @@ from .model import (
     clear_statistics,
     correct_intake,
     cycle_is_active,
+    cycle_time_plan,
+    calculate_cycle_schedule,
     confirm_slot,
     delete_doctor,
     end_cycle,
@@ -564,6 +566,7 @@ class PillPalManager:
                 doctor["practice_closures"] = normalize_practice_closures(
                     doctor.get("practice_closures", []), dt_util.now().date()
                 )
+            await self._async_refresh_holiday_forecast(profile["person_id"], force=True)
             current = dt_util.now()
             self._apply_dynamic_context(profile, current)
             self._reconcile_cycle_lifecycle(
@@ -626,9 +629,6 @@ class PillPalManager:
         self._running = True
         self._register_runtime_listeners()
         for profile in self.active_profiles:
-            await self._async_refresh_holiday_forecast(
-                profile["person_id"], force=True
-            )
             self._create_task(
                 self._async_sync_inventory_notifications(profile["person_id"]),
                 f"Pill★Pal inventory alerts {profile['person_id']}",
@@ -2077,7 +2077,10 @@ class PillPalManager:
         calendar_entity = str(settings.get("holiday_calendar", ""))
         calendar_state = self.hass.states.get(calendar_entity) if calendar_entity else None
         runtime = profile.setdefault("runtime", {})
-        runtime["next_alarm_at"] = alarm.isoformat() if alarm is not None else None
+        alarm_at = alarm.isoformat() if alarm is not None else None
+        if runtime.get("next_alarm_at") != alarm_at:
+            runtime["effective_due_at"] = {}
+        runtime["next_alarm_at"] = alarm_at
         runtime["holiday_calendar_active"] = bool(calendar_state and calendar_state.state == "on")
         runtime["holiday_calendar_message"] = (
             str(calendar_state.attributes.get("message", "")) if calendar_state else ""
@@ -2312,6 +2315,7 @@ class PillPalManager:
 
         settings = profile.get("settings", {})
         helper_id = str(settings.get("awake_helper", "")).strip()
+        self._apply_dynamic_context(profile, now)
         helper_state = self.hass.states.get(helper_id) if helper_id else None
         if helper_id and self._state_available(helper_state):
             if helper_state.state == "off" and cycle_is_active(profile):
@@ -2323,26 +2327,43 @@ class PillPalManager:
                 and allow_helper_recovery
             ):
                 awake_at = dt_util.as_local(helper_state.last_changed)
-                if awake_at.date() == now.date():
-                    start_cycle(profile, awake_at, started_by="awake_helper")
+                if (
+                    awake_at.date() == now.date()
+                    and profile.get("runtime", {}).get("cycle_date") != now.date().isoformat()
+                ):
+                    start_cycle(
+                        profile, awake_at, started_by="awake_helper",
+                        time_plan=cycle_time_plan(profile, awake_at.date(), today=now.date()),
+                    )
                     return True
             return False
 
+        time_plan = cycle_time_plan(profile, now.date(), today=now.date())
         try:
             fallback_time = datetime.strptime(
-                str(settings.get("fallback_wake_time", "08:00")), "%H:%M"
+                time_plan["values"]["wake_time"], "%H:%M"
             ).time()
         except (TypeError, ValueError):
             fallback_time = datetime.strptime("08:00", "%H:%M").time()
         fallback_at = datetime.combine(now.date(), fallback_time, now.tzinfo)
+        # Round-trip through UTC maps a nonexistent spring clock time forward;
+        # the repeated autumn clock time uses its first occurrence (fold=0).
+        fallback_at = fallback_at.astimezone(timezone.utc).astimezone(now.tzinfo)
         runtime = profile.setdefault("runtime", {})
         if (
-            now >= fallback_at
+            now.astimezone(timezone.utc) >= fallback_at.astimezone(timezone.utc)
             and runtime.get("fallback_wake_last_started_date") != now.date().isoformat()
+            and runtime.get("cycle_date") != now.date().isoformat()
         ):
+            calculate_cycle_schedule(
+                {"settings": settings, "runtime": {
+                    "time_plan_snapshot": time_plan,
+                    "next_alarm_at": runtime.get("next_alarm_at"),
+                }}, fallback_at,
+            )
             if cycle_is_active(profile):
                 end_cycle(profile, fallback_at, source="fallback_time")
-            start_cycle(profile, fallback_at, started_by="fallback_time")
+            start_cycle(profile, fallback_at, started_by="fallback_time", time_plan=time_plan)
             return True
         return False
 
@@ -2390,12 +2411,20 @@ class PillPalManager:
                 }:
                     continue
                 current = dt_util.now()
+                self._apply_dynamic_context(profile, current)
                 awake_entity = str(settings.get("awake_helper", ""))
                 if entity_id == awake_entity and self._state_available(new_state):
                     old_value = old_state.state if self._state_available(old_state) else None
                     if new_state.state == "on" and old_value != "on":
-                        if not cycle_is_active(profile):
-                            start_cycle(profile, current, started_by="awake_helper")
+                        recovered_same_day = (
+                            old_value is None
+                            and profile.get("runtime", {}).get("cycle_date") == current.date().isoformat()
+                        )
+                        if not cycle_is_active(profile) and not recovered_same_day:
+                            start_cycle(
+                                profile, current, started_by="awake_helper",
+                                time_plan=cycle_time_plan(profile, current.date(), today=current.date()),
+                            )
                     elif new_state.state == "off" and old_value != "off":
                         if cycle_is_active(profile):
                             end_cycle(profile, current, source="awake_helper")

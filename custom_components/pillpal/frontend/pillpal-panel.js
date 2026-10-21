@@ -356,6 +356,23 @@ class PillPalPanel extends HTMLElement {
 
   async _change(event) {
     const el = event.target;
+    if (el.closest(".time-plan")) {
+      this._formDirty = true;
+      const card = el.closest(".time-plan");
+      if (el.dataset.planField === "holiday_enabled") {
+        if (el.checked && card.dataset.holidayInitialized !== "true") {
+          card.querySelectorAll('[data-plan-set="normal"] input').forEach(input => {
+            card.querySelector(`[data-plan-set="holiday"] [data-value="${input.dataset.value}"]`).value = input.value;
+          });
+          card.dataset.holidayInitialized = "true";
+        }
+        const holiday = card.querySelector('[data-plan-set="holiday"]');
+        holiday.hidden = !el.checked;
+        holiday.querySelectorAll("input").forEach(input => { input.required = el.checked; });
+      }
+      this._updatePlanSummary(card);
+      return;
+    }
     if (el.name === "as_needed_allowed") {
       const settings = this.shadowRoot.querySelector(".prn-settings");
       if (settings) settings.hidden = !el.checked;
@@ -541,6 +558,18 @@ class PillPalPanel extends HTMLElement {
   }
 
   async _handleAction(action, target) {
+    if (action === "add-time-plan" || action === "remove-time-plan") {
+      if (action === "remove-time-plan") target.closest(".time-plan").remove();
+      else {
+        const normal = this._readTimePlans(this.shadowRoot.querySelector("#settings-form")).find(plan => plan.id === "standard").normal;
+        const plan = { id: `plan_${crypto.randomUUID().replaceAll("-", "")}`, name: "Neuer Zeitplan", enabled: false, weekdays: [5, 6], normal, holiday: {...normal}, holiday_enabled: false, holiday_initialized: false };
+        this.shadowRoot.querySelector("#time-plans").insertAdjacentHTML("beforeend", this._timePlanCard(plan, true));
+        this.shadowRoot.querySelector("#time-plans .time-plan:last-child [data-plan-field='name']").focus();
+      }
+      this._formDirty = true;
+      this._setFeedback("pending", "Zeitplanänderungen werden mit Änderungen speichern übernommen. Verwerfen stellt den gespeicherten Stand wieder her.", "settings-form");
+      return;
+    }
     if (action === "discard-changes") {
       await this._discardChanges(target.dataset.scope || "page");
     } else if (action === "confirm" || action === "snooze" || action === "skip") {
@@ -610,6 +639,7 @@ class PillPalPanel extends HTMLElement {
 
   async _saveSettings(form) {
     const raw = Object.fromEntries(new FormData(form).entries());
+    if (form.querySelector("#time-plans")) raw.time_plans = this._readTimePlans(form);
     const times = {};
     for (const slot of Object.keys(SLOT_LABELS)) {
       if (`time_${slot}` in raw) { times[slot] = raw[`time_${slot}`]; delete raw[`time_${slot}`]; }
@@ -792,11 +822,11 @@ class PillPalPanel extends HTMLElement {
   }
 
   _renderLoading() {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b3/pillpal.css?v=523b3"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b4/pillpal.css?v=523b4"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
   }
 
   _renderFatal(err) {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b3/pillpal.css?v=523b3"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b4/pillpal.css?v=523b4"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
   }
 
   _render() {
@@ -819,12 +849,12 @@ class PillPalPanel extends HTMLElement {
       const text = this._adminMode
         ? "Es gibt keine Person, deren Profil du als Administrator betreuen darfst."
         : "Dein Home-Assistant-Benutzer ist keiner aufgenommenen Person zugeordnet.";
-      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b3/pillpal.css?v=523b3"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
+      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b4/pillpal.css?v=523b4"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
       return;
     }
     const meta = PAGE_META[this._page];
     const markup = `
-      <link rel="stylesheet" href="/pillpal_static_523b3/pillpal.css?v=523b3">
+      <link rel="stylesheet" href="/pillpal_static_523b4/pillpal.css?v=523b4">
       <style>:host{--accent:${meta[1]}}</style>
       <main class="app page-${this._page} ${this.hass?.themes?.darkMode ? "theme-dark" : "theme-light"}">
         <header class="mobile-toolbar"><ha-menu-button></ha-menu-button><strong>Pill★Pal · ${meta[0]}</strong></header>
@@ -962,9 +992,11 @@ class PillPalPanel extends HTMLElement {
     if (currentErrors.length) alerts.push(`<article class="alert error"><ha-icon icon="mdi:alert-octagon-outline"></ha-icon><span>Fehler erkannt · Details im Log</span><button type="button" class="secondary" data-action="acknowledge_errors">Als gelesen markieren</button></article>`);
     const cycleActive = profile.runtime?.cycle_state === "active";
     const cycleState = cycleActive ? "Tages-Zyklus aktiv" : profile.runtime?.cycle_state === "ended" ? "Tages-Zyklus beendet" : "Tages-Zyklus noch nicht gestartet";
-    const startedBy = profile.runtime?.cycle_started_by === "awake_helper" ? "Aufgestanden-Helfer" : profile.runtime?.cycle_started_by === "fallback_time" ? "Fallback-Aufstehzeit" : "unbekannter Auslöser";
-    const scheduleSource = esc(this._localizedText(profile.runtime?.schedule_source || "Fallback-Zeiten"));
-    const cycleDetail = cycleActive ? `Gestartet: ${dateTime(profile.runtime.cycle_started_at)} · Auslöser: ${startedBy} · Einnahmezeiten: ${scheduleSource}` : profile.runtime?.cycle_ended_at ? `Beendet: ${dateTime(profile.runtime.cycle_ended_at)}` : "Start durch Aufgestanden-Helfer oder Fallback-Aufstehzeit";
+    const startedBy = profile.runtime?.cycle_started_by === "awake_helper" ? "Aufgestanden-Helfer" : profile.runtime?.cycle_started_by === "fallback_time" ? "Zeitplan" : "unbekannter Auslöser";
+    const scheduleSource = esc(this._localizedText(profile.runtime?.schedule_source || "Zeitplan"));
+    const planSnapshot = profile.runtime?.time_plan_snapshot;
+    const planDetail = planSnapshot ? ` · Zeitplan: ${esc(planSnapshot.plan_name)}${planSnapshot.holiday_applied ? " · Feiertagszeiten" : ""}` : "";
+    const cycleDetail = cycleActive ? `Gestartet: ${dateTime(profile.runtime.cycle_started_at)}${planDetail} · Start: ${startedBy} · Abend/Nacht: ${scheduleSource}` : profile.runtime?.cycle_ended_at ? `Beendet: ${dateTime(profile.runtime.cycle_ended_at)}` : "Start durch Aufgestanden-Helfer oder Zeitplan";
     const cycle = `<article class="inner"><ha-icon icon="${cycleActive ? "mdi:weather-sunset-up" : "mdi:weather-sunset-down"}"></ha-icon><div><strong>${cycleState}</strong><p>${cycleDetail}</p></div></article>`;
     const lastActivity = profile.runtime?.last_activity || "";
     const status = lastActivity ? `<article class="inner"><ha-icon icon="mdi:message-text-outline"></ha-icon><div><strong>Letzte Aktivität</strong><p>${esc(this._localizedText(lastActivity))}</p></div></article>` : "";
@@ -1106,6 +1138,38 @@ class PillPalPanel extends HTMLElement {
     return this._pageBody(`<div class="manage-top"><select id="med-select">${options}</select>${med ? `<div class="actions"><button class="secondary" data-action="refill"><ha-icon icon="mdi:package-up"></ha-icon>Auffüllen</button><button class="secondary" data-action="${med.archived ? "reactivate_medication" : "archive_medication"}"><ha-icon icon="mdi:archive-arrow-${med.archived ? "up" : "down"}-outline"></ha-icon>${med.archived ? "Reaktivieren" : "Archivieren"}</button></div>` : ""}</div>${this._feedbackSlot("med-actions", "action-feedback")}<form id="med-form" class="form-grid"><label>Name<input name="name" value="${esc(data.name)}" required></label><label>Beschreibung<input name="description" value="${esc(data.description)}"></label><label>Arzt<select name="doctor_id">${doctorOptions}</select></label><label>Einheit<select name="unit_pair">${unitChoices.map(([one, many]) => `<option value="${esc(`${one}|${many}`)}" ${`${one}|${many}` === unitValue ? "selected" : ""}>${esc(`${one}/${many}`)}</option>`).join("")}</select></label><label>Kleinste Teilung<select name="step"><option value="0.25" ${Number(data.step) === .25 ? "selected" : ""}>Viertel (0,25)</option><option value="0.5" ${Number(data.step) === .5 ? "selected" : ""}>Halb (0,5)</option><option value="1" ${Number(data.step) === 1 ? "selected" : ""}>Ganz (1)</option></select></label><label>Packungsgröße${this._number("pack_size", data.pack_size, data.step || 1)}</label><label>Aktueller Bestand${this._number("stock", data.stock, data.step || 1)}</label><label>Kosten/Zuzahlung pro Packung (${esc(profile.settings.currency || "€")})${this._number("cost", data.cost, .01)}</label>${Object.entries(SLOT_LABELS).map(([slot, label]) => `<label>Dosis ${label}${this._number(`dose_${slot}`, data.doses?.[slot] || 0, data.step || 1)}</label>`).join("")}<label class="check"><input type="checkbox" name="as_needed_allowed" ${data.as_needed_allowed ? "checked" : ""}>Bedarfseinnahme erlauben</label><div class="prn-settings" ${data.as_needed_allowed ? "" : "hidden"}><label>Einzeldosis max.${this._number("single_max", data.single_max, data.step || 1)}</label><label>Tagesdosis max.${this._number("daily_max", data.daily_max, data.step || 1)}</label><label>Taster für Bedarfseinnahme<select name="button_helper">${helperOptions}</select></label><label>Menge je Tastendruck${this._number("button_amount", data.button_amount || data.step, data.step || 1, data.step || .001)}</label></div><label class="check"><input type="checkbox" name="expiry_enabled" ${data.expiry_enabled ? "checked" : ""}>MHD-Prüfung aktiv</label><label class="expiry-settings" ${data.expiry_enabled ? "" : "hidden"}>Frühestes MHD<input type="date" id="refill-expiry" name="expiry_date" min="${expiryMin}" max="${expiryMax}" value="${esc(data.expiry_date)}"></label><div class="form-actions"><button class="primary save" type="submit"><ha-icon icon="mdi:content-save-check"></ha-icon>Medikament speichern</button><button class="secondary" type="button" data-action="discard-changes" data-scope="med-form"><ha-icon icon="mdi:restore"></ha-icon>Änderungen verwerfen</button></div>${this._feedbackSlot("med-form", "form-feedback")}</form>`, "page-body-verwalten");
   }
 
+  _timePlanCard(plan, open = false) {
+    const standard = plan.id === "standard";
+    const values = (kind) => `<div class="plan-values" data-plan-set="${kind}" ${kind === "holiday" && !plan.holiday_enabled ? "hidden" : ""}>${Object.entries({wake_time: "Aufstehzeit", morning_delay_minutes: "Verzögerung nach dem Aufstehen (Min.)", lunch_window_from: "Mittagsfenster von", lunch_window_to: "Mittagsfenster bis", evening: "Abends", night: "Zur Nacht"}).map(([key, label]) => `<label>${label}<input data-value="${key}" type="${key === "morning_delay_minutes" ? "number" : "time"}" ${key === "morning_delay_minutes" ? 'min="0" max="120" step="1"' : ''} value="${esc((plan[kind] || plan.normal)[key])}" ${kind === "normal" || plan.holiday_enabled ? "required" : ""}></label>`).join("")}</div>`;
+    return `<details class="inner time-plan" data-plan-id="${esc(plan.id)}" data-holiday-initialized="${Boolean(plan.holiday_initialized ?? true)}" ${open ? "open" : ""}>
+      <summary><strong data-plan-summary>${esc(plan.name)} · ${standard ? "Täglich" : plan.weekdays.map(day => ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"][day]).join(", ")} · ${plan.enabled ? "Aktiv" : "Deaktiviert"}${plan.holiday_enabled ? " · Feiertagszeiten hinterlegt" : ""}</strong></summary>
+      <div class="plan-editor"><label>Name<input data-plan-field="name" value="${esc(plan.name)}" required maxlength="100"></label>
+      ${standard ? '<p class="muted">Gilt, wenn kein anderer Zeitplan passt · Immer aktiv · Montag bis Sonntag</p>' : `<label class="check"><input type="checkbox" data-plan-field="enabled" ${plan.enabled ? "checked" : ""}>Aktiv</label><fieldset class="plan-weekdays"><legend>Wochentage</legend>${["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((label, day) => `<label class="check"><input type="checkbox" data-weekday="${day}" ${plan.weekdays.includes(day) ? "checked" : ""}>${label}</label>`).join("")}</fieldset>`}
+      ${values("normal")}
+      <label class="check"><input type="checkbox" data-plan-field="holiday_enabled" ${plan.holiday_enabled ? "checked" : ""}>Bei Feiertag abweichende Zeiten</label>
+      <p class="muted">Feiertagszeiten benötigen den Feiertagskalender unter „Schnittstellen“.</p>
+      ${values("holiday")}
+      ${standard ? "" : '<button type="button" class="secondary" data-action="remove-time-plan">Zeitplan entfernen</button>'}</div></details>`;
+  }
+
+  _readTimePlans(form) {
+    return [...form.querySelectorAll(".time-plan")].map(card => {
+      const standard = card.dataset.planId === "standard";
+      const readValues = kind => Object.fromEntries([...card.querySelectorAll(`[data-plan-set="${kind}"] input`)].map(input => [input.dataset.value, input.type === "number" ? Number(input.value) : input.value]));
+      return {id: card.dataset.planId, name: card.querySelector('[data-plan-field="name"]').value,
+        enabled: standard || card.querySelector('[data-plan-field="enabled"]').checked,
+        weekdays: standard ? [0,1,2,3,4,5,6] : [...card.querySelectorAll("[data-weekday]:checked")].map(input => Number(input.dataset.weekday)),
+        normal: readValues("normal"), holiday: readValues("holiday"),
+        holiday_enabled: card.querySelector('[data-plan-field="holiday_enabled"]').checked,
+        holiday_initialized: card.dataset.holidayInitialized === "true"};
+    });
+  }
+
+  _updatePlanSummary(card) {
+    const plan = this._readTimePlans(card.parentElement).find(plan => plan.id === card.dataset.planId);
+    card.querySelector("[data-plan-summary]").textContent = `${plan.name} · ${plan.id === "standard" ? "Täglich" : plan.weekdays.map(day => ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"][day]).join(", ")} · ${plan.enabled ? "Aktiv" : "Deaktiviert"}${plan.holiday_enabled ? " · Feiertagszeiten hinterlegt" : ""}`;
+  }
+
   _settings(profile) {
     const settings = profile.settings || {};
     const o = this._data.options || {};
@@ -1113,10 +1177,9 @@ class PillPalPanel extends HTMLElement {
     let fields = "";
     if (this._page === "zeiten") {
       fields = `
-        <div class="inner info"><ha-icon icon="mdi:information-outline"></ha-icon><p>Ist ein Smartphone-Wecker eingerichtet, werden Morgen-, Abend- und Nachtzeit daraus abgeleitet. Die festen Zeiten bleiben als verlässliche Rückfallwerte erhalten.</p></div>
+        <div class="inner info"><ha-icon icon="mdi:information-outline"></ha-icon><p>Der Aufgestanden-Helfer bestimmt den Start, ein gültiger Smartphone-Wecker die Abend-/Nachtzeiten. Fehlende Informationen ersetzt der passende Zeitplan. Änderungen gelten ab dem nächsten Zyklus.</p></div>
         ${this._subheading("Erinnerungsintervalle", "mdi:alarm")}
         <label>Einnahme vor Fälligkeit erlauben (Min.)${this._number("early_minutes", settings.early_minutes, 1)}</label>
-        <label>Verzögerung nach dem Aufstehen (Min.)${this._number("morning_delay_minutes", settings.morning_delay_minutes, 1)}</label>
         <label>Snooze-Dauer (Min.)${this._number("snooze_minutes", settings.snooze_minutes, 1, 1)}</label>
         <label>Wiederholungsintervall (Min.)${this._number("repeat_minutes", settings.repeat_minutes, 1, 1)}</label>
         ${this._subheading("Bestellungs- und MHD-Fristen", "mdi:calendar-clock")}
@@ -1127,13 +1190,11 @@ class PillPalPanel extends HTMLElement {
         ${this._subheading("Parameter für dynamische Erinnerung", "mdi:alarm-plus")}
         <label>Wecker gültig von<input type="time" name="alarm_window_from" value="${esc(settings.alarm_window_from)}"></label>
         <label>Wecker gültig bis<input type="time" name="alarm_window_to" value="${esc(settings.alarm_window_to)}"></label>
-        <label>Mittagsfenster von<input type="time" name="lunch_window_from" value="${esc(settings.lunch_window_from)}"></label>
-        <label>Mittagsfenster bis<input type="time" name="lunch_window_to" value="${esc(settings.lunch_window_to)}"></label>
         <label>Nachtruhe vor nächstem Wecker (Std.)${this._number("bedtime_offset_hours", settings.bedtime_offset_hours, .25)}</label>
         <label>Abends vor Nachtruhe (Std.)${this._number("evening_before_bedtime_hours", settings.evening_before_bedtime_hours, .25)}</label>
-        ${this._subheading("Fallback-Einnahmezeiten", "mdi:clock-outline")}
-        <label>Fallback-Aufstehzeit<input type="time" name="fallback_wake_time" value="${esc(settings.fallback_wake_time || "08:00")}"></label>
-        ${Object.entries(SLOT_LABELS).map(([slot, label]) => `<label>${label}<input type="time" name="time_${slot}" value="${esc(settings.times?.[slot])}"></label>`).join("")}`;
+        ${this._subheading("Zeitpläne", "mdi:calendar-clock")}
+        <div id="time-plans">${(settings.time_plans || []).map(plan => this._timePlanCard(plan)).join("")}</div>
+        <div class="form-actions"><button type="button" class="secondary" data-action="add-time-plan">Zeitplan hinzufügen</button></div>`;
     } else if (this._page === "benachrichtigungen") {
       fields = `
         <div class="inner info"><ha-icon icon="mdi:information-outline"></ha-icon><p>Ist ein Notify-Ziel eingerichtet, werden personenbezogen Push-Nachrichten versendet. Deren Verhalten kann hier konfiguriert werden.</p></div>
@@ -1191,4 +1252,4 @@ class PillPalPanel extends HTMLElement {
   }
 }
 
-if (!customElements.get("pillpal-panel-523b3")) customElements.define("pillpal-panel-523b3", PillPalPanel);
+if (!customElements.get("pillpal-panel-523b4")) customElements.define("pillpal-panel-523b4", PillPalPanel);

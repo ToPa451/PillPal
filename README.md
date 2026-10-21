@@ -73,7 +73,7 @@ Complete these steps for each person before relying on reminders:
 
 1. Open **Interfaces** and select a notification target, usually the person's `notify.mobile_app_…` service.
 2. Optionally select a next-alarm sensor, an awake helper, a collective-confirmation helper, a holiday calendar, and an intake calendar.
-3. Open **Times** and review the fixed fallback times, the fallback wake-up time, the early-intake window, snooze duration, and reminder interval.
+3. Open **Times** and review the standard time plan, the early-intake window, snooze duration, and reminder interval.
 4. Open **Notifications** and adjust the message text and the Android or iOS notification behavior.
 5. Open **Practice** and add the person's doctors, including opening hours and known closures. This makes the doctors available for assignment while creating medication.
 6. Open **Manage** and add the person's medications and doses, assigning a previously created doctor where applicable.
@@ -85,14 +85,19 @@ Use **Save Changes** on each settings page. **Discard Changes** restores the las
 
 The **Times** page controls when regular doses become due.
 
-- **Fallback times** define reliable fixed times for morning, noon, evening, and night.
-- **Fallback wake-up time** starts a daily cycle when no awake helper is used.
-- A configured **awake helper** can start the daily cycle when the person gets up. The morning dose follows after the configured wake-up delay.
-- A configured **next-alarm sensor** dynamically derives morning, evening, and night times when its value falls inside the configured valid alarm window. Fixed times remain available as fallbacks.
+- Each person has an always-active **Standard** time plan for all seven days. Add named plans for selected weekdays, such as Saturday and Sunday. Active additional plans cannot overlap. Deactivated plans keep their values; removing a plan takes effect when you save. **Discard Changes** restores the saved plans.
+- Each plan contains a wake-up time, a morning delay (0–120 minutes), a lunch window, and evening/night times. Morning remains relative to the actual cycle start; noon is calculated halfway to evening and limited to the lunch window. Night at or before the evening clock time belongs to the following day.
+- Enable **Bei Feiertag abweichende Zeiten** to enter separate holiday parameters. The first activation copies the normal values; subsequent toggles retain your holiday values. Select a holiday calendar under **Interfaces**. Each selected plan uses its own holiday settings; it does not inherit holiday times from Standard. Without a calendar, or for unknown dates after a calendar error, normal values apply. Known dates from the same calendar remain usable.
+- An available **awake helper** starts/ends the cycle when it switches on/off. An available helper that is off prevents automatic starts. Missing, unknown or unavailable helpers use the selected plan's wake-up time instead.
+- A valid **next-alarm sensor** independently determines evening/night times using the existing bedtime offsets. It must refer to the next day and fall inside the configured alarm window. Missing or invalid alarms use the selected plan's evening/night times. The alarm does not trigger waking up.
 - **Allow intake before due** makes a dose bookable shortly before its due time.
 - **Snooze duration** sets the default postponement; **repeat interval** controls repeated reminders.
 
-After changing a time plan, save it and check the calculated times on **Overview**.
+Save changes on **Times**. The local cycle-start date determines the selected plan, including its holiday status. The selected parameters are stored for that cycle, survive restarts and exports, and stay unchanged after editing or removing the source plan or changing calendar data. Changes apply to the next cycle. Later alarm updates can still adjust future doses; due or completed doses remain unchanged. **Overview** shows the saved plan and the actual start and evening/night sources.
+
+On upgrade to data schema **13**, existing effective wake-up, delay, lunch-window, evening and night parameters migrate automatically into exactly one Standard plan. Existing doses, history, stock and action tokens are retained. Old exports use the same migration. The previous fixed morning/noon fields were not used by the calculation and have been removed from the form; morning and noon continue to be calculated. No weekend times are guessed. Legacy writes of effective time fields map to Standard; fixed morning/noon writes are rejected with an explanation.
+
+At restart, only a missing cycle for the current local day is started, using its planned wake-up time. Missed days are not replayed. During the Berlin spring clock change, a nonexistent wake-up time moves forward by the DST gap (02:30 → 03:30); during autumn, the first occurrence is used. The stored cycle date prevents a second automatic start.
 
 ### Add doctors and account for practice closures
 
@@ -254,7 +259,7 @@ For regular medication, configure a valid mobile notify target under **Interface
 
 ### Why does Pill★Pal use a different time from my phone alarm?
 
-The alarm must be exposed to Home Assistant as a sensor, selected under **Interfaces**, and fall within the valid alarm window configured under **Times**. Otherwise, Pill★Pal uses the fixed fallback schedule.
+The alarm must be exposed to Home Assistant as a sensor, selected under **Interfaces**, and fall within the valid alarm window configured under **Times**. Otherwise, Pill★Pal uses the selected time plan's evening/night parameters.
 
 ### Does skipping a dose reduce the stock?
 
