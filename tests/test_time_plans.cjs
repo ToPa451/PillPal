@@ -30,11 +30,24 @@ const profile = {person_id:'person.test', name:'Testperson', medications:[], arc
   let browser;
   try {
     browser = await chromium.launch({headless:true, ...(process.env.PLAYWRIGHT_CHANNEL ? {channel:process.env.PLAYWRIGHT_CHANNEL} : {})});
+    for (const insecure of (process.env.PILLPAL_TEST_INSECURE ? [true] : [false,true])) {
     for (const width of [360,390,768,1440]) {
       const page = await browser.newPage({viewport:{width,height:1000}});
       const errors = [];
       page.on('pageerror',error => errors.push(error.message));
-      await page.goto(`http://127.0.0.1:${server.address().port}`);
+      if (insecure) {
+        // A LAN HTTP address is not a secure context, unlike localhost HTTP.
+        await page.route('http://pillpal.test/**', async route => {
+          const url = new URL(route.request().url());
+          if (url.pathname === '/') return route.fulfill({contentType:'text/html; charset=utf-8',body:'<!doctype html><meta charset="utf-8"><body style="margin:0"><script src="/pillpal-panel.js"></script>'});
+          const file = path.join(frontend,path.basename(url.pathname));
+          if (!fs.existsSync(file)) return route.fulfill({status:404,body:''});
+          return route.fulfill({contentType:file.endsWith('.css') ? 'text/css' : 'text/javascript',body:fs.readFileSync(file)});
+        });
+      }
+      await page.goto(insecure ? 'http://pillpal.test/' : `http://127.0.0.1:${server.address().port}`);
+      assert.equal(await page.evaluate(() => window.isSecureContext),!insecure);
+      if (insecure) assert.equal(await page.evaluate(() => typeof crypto.randomUUID),'undefined');
       await page.evaluate(({profile,component}) => {
         window.saved = structuredClone(profile);
         window.payloads = [];
@@ -67,6 +80,8 @@ const profile = {person_id:'person.test', name:'Testperson', medications:[], arc
       await card.locator('[data-plan-field="holiday_enabled"]').check();
       assert.equal(await card.locator('[data-plan-set="holiday"] [data-value="wake_time"]').inputValue(),'10:15');
       await page.locator('[data-action="add-time-plan"]').click();
+      await page.waitForFunction(() => panel.shadowRoot.querySelectorAll('.time-plan').length === 2, null, {timeout:3000})
+        .catch(() => {throw new Error(`Plan was not added: ${errors.join('; ')}`);});
       const extra = page.locator('.time-plan').nth(1);
       await extra.locator('[data-plan-field="name"]').fill('Wochenende');
       await extra.locator('[data-plan-field="enabled"]').check();
@@ -79,6 +94,8 @@ const profile = {person_id:'person.test', name:'Testperson', medications:[], arc
       const payload = await page.evaluate(() => payloads[0]);
       assert.equal(payload.repeat_minutes,17);
       assert.equal(payload.time_plans.length,2);
+      assert.match(payload.time_plans[1].id,/^plan_[a-f0-9]{32}$/);
+      assert.notEqual(payload.time_plans[0].id,payload.time_plans[1].id);
       assert.deepEqual(payload.time_plans[1].weekdays,[5,6]);
       assert.equal(payload.time_plans[1].normal.night,'00:30');
       assert.equal(payload.time_plans[0].holiday.wake_time,'10:15');
@@ -137,8 +154,9 @@ const profile = {person_id:'person.test', name:'Testperson', medications:[], arc
       assert.ok(dashboard.includes('Start: Aufgestanden-Helfer'));
       assert.ok(dashboard.includes('Abend/Nacht: Smartphone-Wecker'));
       assert.deepEqual(errors,[]);
-      console.log(`PASS ${width}px: plan CRUD, holiday retention, discard, refresh, layout and dashboard`);
+      console.log(`PASS ${insecure ? 'LAN HTTP' : 'localhost'} ${width}px: plan CRUD, holiday retention, discard, refresh, layout and dashboard`);
       await page.close();
+    }
     }
   } finally {if (browser) await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -562,7 +562,10 @@ class PillPalPanel extends HTMLElement {
       if (action === "remove-time-plan") target.closest(".time-plan").remove();
       else {
         const normal = this._readTimePlans(this.shadowRoot.querySelector("#settings-form")).find(plan => plan.id === "standard").normal;
-        const plan = { id: `plan_${crypto.randomUUID().replaceAll("-", "")}`, name: "Neuer Zeitplan", enabled: false, weekdays: [5, 6], normal, holiday: {...normal}, holiday_enabled: false, holiday_initialized: false };
+        // getRandomValues is also available over local HTTP, where randomUUID
+        // is unavailable because the browser does not consider it secure.
+        const id = `plan_${Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, "0")).join("")}`;
+        const plan = { id, name: "Neuer Zeitplan", enabled: false, weekdays: [5, 6], normal, holiday: {...normal}, holiday_enabled: false, holiday_initialized: false };
         this.shadowRoot.querySelector("#time-plans").insertAdjacentHTML("beforeend", this._timePlanCard(plan, true));
         this.shadowRoot.querySelector("#time-plans .time-plan:last-child [data-plan-field='name']").focus();
       }
@@ -822,11 +825,11 @@ class PillPalPanel extends HTMLElement {
   }
 
   _renderLoading() {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b4/pillpal.css?v=523b4"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b5/pillpal.css?v=523b5"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
   }
 
   _renderFatal(err) {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b4/pillpal.css?v=523b4"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b5/pillpal.css?v=523b5"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
   }
 
   _render() {
@@ -849,12 +852,12 @@ class PillPalPanel extends HTMLElement {
       const text = this._adminMode
         ? "Es gibt keine Person, deren Profil du als Administrator betreuen darfst."
         : "Dein Home-Assistant-Benutzer ist keiner aufgenommenen Person zugeordnet.";
-      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b4/pillpal.css?v=523b4"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
+      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b5/pillpal.css?v=523b5"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
       return;
     }
     const meta = PAGE_META[this._page];
     const markup = `
-      <link rel="stylesheet" href="/pillpal_static_523b4/pillpal.css?v=523b4">
+      <link rel="stylesheet" href="/pillpal_static_523b5/pillpal.css?v=523b5">
       <style>:host{--accent:${meta[1]}}</style>
       <main class="app page-${this._page} ${this.hass?.themes?.darkMode ? "theme-dark" : "theme-light"}">
         <header class="mobile-toolbar"><ha-menu-button></ha-menu-button><strong>Pill★Pal · ${meta[0]}</strong></header>
@@ -1252,4 +1255,4 @@ class PillPalPanel extends HTMLElement {
   }
 }
 
-if (!customElements.get("pillpal-panel-523b4")) customElements.define("pillpal-panel-523b4", PillPalPanel);
+if (!customElements.get("pillpal-panel-523b5")) customElements.define("pillpal-panel-523b5", PillPalPanel);
