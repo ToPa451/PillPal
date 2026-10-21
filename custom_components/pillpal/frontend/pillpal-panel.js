@@ -212,8 +212,12 @@ class PillPalPanel extends HTMLElement {
     } finally {
       if (request !== this._loadRequest) return;
       this._busy = false;
-      this._render();
-      if (this._page === "statistik") this._loadStatistics();
+      if (quiet && this._page === "statistik" && this._statistics) {
+        await this._loadStatistics({ quiet: true });
+      } else {
+        this._render();
+        if (this._page === "statistik") this._loadStatistics();
+      }
     }
   }
 
@@ -512,12 +516,12 @@ class PillPalPanel extends HTMLElement {
     return message;
   }
 
-  async _loadStatistics() {
+  async _loadStatistics({ quiet = false } = {}) {
     if (!this._data?.selected_person_id || this._page !== "statistik") return;
     const request = ++this._statisticsRequest;
-    this._statisticsLoading = true;
+    this._statisticsLoading = !quiet;
     this._statisticsError = "";
-    this._render();
+    if (!quiet) this._render();
     try {
       const result = await this._hass.connection.sendMessagePromise(this._statisticsMessage());
       if (request !== this._statisticsRequest) return;
@@ -787,15 +791,25 @@ class PillPalPanel extends HTMLElement {
   }
 
   _renderLoading() {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b1/pillpal.css?v=523b1"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b2/pillpal.css?v=523b2"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
   }
 
   _renderFatal(err) {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b1/pillpal.css?v=523b1"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b2/pillpal.css?v=523b2"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
   }
 
   _render() {
     if (!this._data) return;
+    const previousList = this.shadowRoot.querySelector(".intake-list");
+    const openIntakes = new Set([...this.shadowRoot.querySelectorAll("details.intake-entry[open]")].map((item) => item.dataset.intakeId));
+    const scrollPositions = [];
+    if (this._page === "statistik" && previousList) {
+      // Home Assistant may scroll an ancestor inside its own shadow root.
+      for (let node = this; node; node = node.parentElement || node.getRootNode()?.host) {
+        scrollPositions.push([node, node.scrollLeft, node.scrollTop]);
+      }
+      scrollPositions.push([document.scrollingElement, window.scrollX, window.scrollY]);
+    }
     const previousNav = this.shadowRoot.querySelector("nav");
     const navLeft = previousNav?.scrollLeft || 0;
     const navTop = previousNav?.scrollTop || 0;
@@ -804,12 +818,12 @@ class PillPalPanel extends HTMLElement {
       const text = this._adminMode
         ? "Es gibt keine Person, deren Profil du als Administrator betreuen darfst."
         : "Dein Home-Assistant-Benutzer ist keiner aufgenommenen Person zugeordnet.";
-      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b1/pillpal.css?v=523b1"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
+      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b2/pillpal.css?v=523b2"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
       return;
     }
     const meta = PAGE_META[this._page];
-    this.shadowRoot.innerHTML = `
-      <link rel="stylesheet" href="/pillpal_static_523b1/pillpal.css?v=523b1">
+    const markup = `
+      <link rel="stylesheet" href="/pillpal_static_523b2/pillpal.css?v=523b2">
       <style>:host{--accent:${meta[1]}}</style>
       <main class="app page-${this._page} ${this.hass?.themes?.darkMode ? "theme-dark" : "theme-light"}">
         <header class="mobile-toolbar"><ha-menu-button></ha-menu-button><strong>Pill★Pal · ${meta[0]}</strong></header>
@@ -820,6 +834,30 @@ class PillPalPanel extends HTMLElement {
           ${this._renderPage(profile)}
         </div>
       </main>`;
+    // Keep the existing DOM for unchanged statistics, including native details state.
+    if (this._page === "statistik" && previousList && this._statisticsMarkup === markup) return;
+    this._statisticsMarkup = this._page === "statistik" ? markup : null;
+    const stylesheet = this.shadowRoot.querySelector('link[rel="stylesheet"]');
+    const template = document.createElement("template");
+    template.innerHTML = markup;
+    const nextStylesheet = template.content.querySelector('link[rel="stylesheet"]');
+    if (stylesheet && stylesheet.href === nextStylesheet?.href) {
+      // Retain the loaded stylesheet to avoid a temporary unstyled layout.
+      nextStylesheet.remove();
+      for (const node of [...this.shadowRoot.childNodes]) {
+        if (node !== stylesheet) node.remove();
+      }
+      this.shadowRoot.append(template.content);
+    } else {
+      this.shadowRoot.replaceChildren(template.content);
+    }
+    const currentList = this.shadowRoot.querySelector(".intake-list");
+    const sameStatisticsContext = Boolean(previousList && currentList && previousList.dataset.context === currentList.dataset.context);
+    if (sameStatisticsContext) {
+      for (const item of this.shadowRoot.querySelectorAll("details.intake-entry")) {
+        item.open = openIntakes.has(item.dataset.intakeId);
+      }
+    }
     const menuButton = this.shadowRoot.querySelector("ha-menu-button");
     if (menuButton) {
       menuButton.hass = this._hass;
@@ -836,7 +874,13 @@ class PillPalPanel extends HTMLElement {
       if (!nav) return;
       nav.scrollLeft = navLeft;
       nav.scrollTop = navTop;
-      this.shadowRoot.querySelector(".nav.active")?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+      if (sameStatisticsContext) {
+        for (const [node, left, top] of scrollPositions) {
+          if (node?.isConnected) { node.scrollLeft = left; node.scrollTop = top; }
+        }
+      } else {
+        this.shadowRoot.querySelector(".nav.active")?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+      }
     });
   }
 
@@ -979,12 +1023,12 @@ class PillPalPanel extends HTMLElement {
       const actions = [["taken", "Als eingenommen markieren"], ["skipped", "Als übersprungen markieren"], ["discarded", "Aus Wertung entfernen"]]
         .filter(([status]) => status !== event.status)
         .map(([status, label]) => `<button type="button" class="secondary" data-action="correct-intake" data-intake-id="${esc(event.slot_id)}" data-status="${status}" data-revision="${esc(event.correction_id || "")}">${label}</button>`).join("");
-      return `<details class="inner intake-entry ${event.status === "discarded" ? "intake-discarded" : ""}"><summary aria-label="${esc(type)}${event.corrected ? ", manuell korrigiert" : ""}, Details und Korrektur anzeigen">${summary}<ha-icon icon="mdi:chevron-down"></ha-icon></summary><div class="intake-editor"><p>Ursprünglicher Zustand: <strong>${esc(STATUS_LABELS[event.original_status] || event.original_status)}</strong>${event.corrected_at ? `<br>Letzte Korrektur: ${dateTime(event.corrected_at)}` : ""}</p><p>Die Änderung gilt für den gesamten Einnahmezeitpunkt:</p>${this._eventMedicationList({ ...event, medications: event.all_medications || event.medications })}<div class="actions intake-actions">${actions}</div><p class="intake-hint">„Aus Wertung entfernen“: Der Eintrag bleibt in der Historie sichtbar, wird aus der Statistik ausgeschlossen und eine vorhandene Bestandsabbuchung wird zurückgenommen.</p></div></details>`;
+      return `<details data-intake-id="${esc(event.slot_id)}" class="inner intake-entry ${event.status === "discarded" ? "intake-discarded" : ""}"><summary aria-label="${esc(type)}${event.corrected ? ", manuell korrigiert" : ""}, Details und Korrektur anzeigen">${summary}<ha-icon icon="mdi:chevron-down"></ha-icon></summary><div class="intake-editor"><p>Ursprünglicher Zustand: <strong>${esc(STATUS_LABELS[event.original_status] || event.original_status)}</strong>${event.corrected_at ? `<br>Letzte Korrektur: ${dateTime(event.corrected_at)}` : ""}</p><p>Die Änderung gilt für den gesamten Einnahmezeitpunkt:</p>${this._eventMedicationList({ ...event, medications: event.all_medications || event.medications })}<div class="actions intake-actions">${actions}</div><p class="intake-hint">„Aus Wertung entfernen“: Der Eintrag bleibt in der Historie sichtbar, wird aus der Statistik ausgeschlossen und eine vorhandene Bestandsabbuchung wird zurückgenommen.</p></div></details>`;
     }).join("");
     const selectedDateLabel = dateOnly(stats.selected_day);
     const periodLabel = `${dateOnly(stats.period_start)} bis ${dateOnly(stats.period_end)}`;
     const loading = this._statisticsLoading ? `<div class="feedback pending"><ha-icon icon="mdi:progress-clock"></ha-icon>Statistik wird aktualisiert …</div>` : this._statisticsError ? `<div class="feedback error"><ha-icon icon="mdi:alert-circle"></ha-icon>${esc(this._statisticsError)}</div>` : "";
-    return `${filterSection}${loading}${this._section(`Gesamtstatistik · ${periodLabel}`, "mdi:counter", `<div class="stats">${cards.map(([label, value, icon]) => `<article class="inner"><ha-icon icon="${icon}"></ha-icon><div><strong>${label}</strong><p>${value}</p></div></article>`).join("")}</div>`)}${this._section("Tagesstatistik im Zeitraum", "mdi:calendar-blank-multiple", `<div class="stat-day-grid">${heat}</div><div class="heat-legend"><span><i class="heat-current"></i>laufender Tag mit offenen Einnahmen</span><span><i class="heat-complete"></i>vollständig</span><span><i class="heat-complete-prn"></i>vollständig + Bedarf</span><span><i class="heat-partial"></i>unvollständig</span><span><i class="heat-not-occurred"></i>nicht erfolgt</span><span><i class="heat-prn"></i>nur Bedarf</span><span><i class="heat-empty"></i>keine Planung/Buchung</span></div>`)}${this._section(`Buchungen und Planung · ${selectedDateLabel}`, "mdi:table", `<p class="intake-hint">Abgeschlossene Einnahme antippen, um sie zu korrigieren. * manuell korrigiert</p><div class="intake-list">${events || `<p>Keine Planung oder Buchung am ausgewählten Tag.</p>`}</div>`)}`;
+    return `${filterSection}${loading}${this._section(`Gesamtstatistik · ${periodLabel}`, "mdi:counter", `<div class="stats">${cards.map(([label, value, icon]) => `<article class="inner"><ha-icon icon="${icon}"></ha-icon><div><strong>${label}</strong><p>${value}</p></div></article>`).join("")}</div>`)}${this._section("Tagesstatistik im Zeitraum", "mdi:calendar-blank-multiple", `<div class="stat-day-grid">${heat}</div><div class="heat-legend"><span><i class="heat-current"></i>laufender Tag mit offenen Einnahmen</span><span><i class="heat-complete"></i>vollständig</span><span><i class="heat-complete-prn"></i>vollständig + Bedarf</span><span><i class="heat-partial"></i>unvollständig</span><span><i class="heat-not-occurred"></i>nicht erfolgt</span><span><i class="heat-prn"></i>nur Bedarf</span><span><i class="heat-empty"></i>keine Planung/Buchung</span></div>`)}${this._section(`Buchungen und Planung · ${selectedDateLabel}`, "mdi:table", `<p class="intake-hint">Abgeschlossene Einnahme antippen, um sie zu korrigieren. * manuell korrigiert</p><div class="intake-list" data-context="${esc(JSON.stringify([this._data.selected_person_id, stats.selected_day]))}">${events || `<p>Keine Planung oder Buchung am ausgewählten Tag.</p>`}</div>`)}`;
   }
 
   _medLine(med, regular, projection = null) {
@@ -1142,4 +1186,4 @@ class PillPalPanel extends HTMLElement {
   }
 }
 
-if (!customElements.get("pillpal-panel-523b1")) customElements.define("pillpal-panel-523b1", PillPalPanel);
+if (!customElements.get("pillpal-panel-523b2")) customElements.define("pillpal-panel-523b2", PillPalPanel);
