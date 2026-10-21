@@ -54,6 +54,7 @@ from .model import (
     archive_removed_profile,
     book_as_needed,
     clear_statistics,
+    correct_intake,
     cycle_is_active,
     confirm_slot,
     delete_doctor,
@@ -94,6 +95,7 @@ from .model import (
 _LOGGER = logging.getLogger(__name__)
 
 _ACTION_LABELS = {
+    "correct_intake": "Abgeschlossene Einnahme korrigieren",
     "confirm": "Einnahme bestätigen",
     "confirm_slot": "Einnahme bestätigen",
     "snooze": "Einnahme zurückstellen",
@@ -1613,6 +1615,18 @@ class PillPalManager:
             person_id,
         )
         return result
+
+    async def async_correct_intake(
+        self, person_id: str, intake_id: str, status: str, expected_revision: str,
+        *, actor: str | None, actor_user_id: str | None,
+    ) -> dict[str, Any]:
+        """Commit the correction and stock together without reopening the cycle."""
+        return await self._mutate(
+            person_id,
+            lambda: correct_intake(self.profile(person_id), intake_id, status,
+                                   expected_revision, actor=actor,
+                                   actor_user_id=actor_user_id, now=dt_util.now()),
+        )
 
     async def async_adjust_stock(
         self,

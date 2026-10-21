@@ -4285,6 +4285,7 @@ def current_and_upcoming(profile: Mapping[str, Any], now: datetime | None = None
         detail = slot_detail(profile, slot, current)
         item.update(
             {
+                "status": detail["status"],
                 "status_label": detail["status_label"],
                 "bookable_at": detail["bookable_at"],
                 "is_due": detail["is_due"],
@@ -4292,7 +4293,7 @@ def current_and_upcoming(profile: Mapping[str, Any], now: datetime | None = None
             }
         )
         status = item.get("status")
-        if status in {"taken", "skipped", "missed"}:
+        if status in {"taken", "skipped", "missed", "discarded"}:
             past.append(item)
         elif item.get("snoozed_until") and current < datetime.fromisoformat(
             str(item["snoozed_until"])
@@ -4309,6 +4310,108 @@ def current_and_upcoming(profile: Mapping[str, Any], now: datetime | None = None
     return {"past": past, "early": early, "due": due, "upcoming": upcoming}
 
 
+def intake_corrections(profile: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    """Resolve the append-only correction chain, independent of display dates."""
+    latest = {}
+    for event in profile.get("events", []):
+        if event.get("type") == "intake_correction":
+            latest[str(event.get("intake_id"))] = event
+    return latest
+
+
+def effective_intake(item: Mapping[str, Any], corrections: Mapping[str, Any]) -> dict[str, Any]:
+    """Overlay a correction without changing the immutable historical fact."""
+    result = deepcopy(dict(item))
+    correction = corrections.get(str(item.get("slot_id")))
+    result.update(original_status=item.get("status"), correction_id="", corrected=False)
+    if correction:
+        result.update(status=correction["status"], corrected=True,
+                      correction_id=correction["id"], corrected_at=correction["timestamp"])
+    return result
+
+
+def correct_intake(
+    profile: dict[str, Any], intake_id: str, status: str, expected_revision: str,
+    *, actor: str | None = None, actor_user_id: str | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Validate the entire stock delta before appending a historical correction."""
+    if status not in {"taken", "skipped", "discarded"}:
+        raise PillPalError("Ungültiger Zielzustand für die Korrektur.")
+    original = None
+    for day in profile.get("history", {}).get("daily", {}).values():
+        if intake_id in day.get("slots", {}):
+            original = day["slots"][intake_id]
+            break
+    terminal_event = None
+    for event in profile.get("events", []):
+        if event.get("type") not in {"regular_taken", "regular_skipped", "regular_missed"}:
+            continue
+        cycle_id = str(event.get("cycle_id") or f"legacy_{event.get('id', event.get('date'))}")
+        if f"{cycle_id}:{event.get('slot')}" == intake_id:
+            terminal_event = event
+            if original is None:
+                original = {"slot_id": intake_id, "status": event["type"].removeprefix("regular_"),
+                            "medications": _history_medications(event.get("medications", []))}
+            break
+    if not original or original.get("status") not in TERMINAL_SLOT_STATUSES:
+        raise PillPalError("Dieser Eintrag ist keine abgeschlossene reguläre Einnahme.")
+    current = effective_intake(original, intake_corrections(profile))
+    if current["correction_id"] != expected_revision:
+        raise PillPalError("Der Eintrag wurde inzwischen geändert. Bitte Statistik neu laden und erneut prüfen.")
+    if current["status"] == status:
+        return {"status": status, "intake_id": intake_id, "unchanged": True}
+    medications = deepcopy(original.get("medications", []))
+    # A taken event records the actual debit, including its historical units.
+    if original["status"] == "taken":
+        booked = (terminal_event or {}).get("medications", [])
+        if not booked or any("stock_before" not in m or "stock_after" not in m for m in booked):
+            raise PillPalError("Die ursprüngliche Bestandsabbuchung ist für diesen Alt-Eintrag nicht eindeutig gespeichert. Korrektur nicht möglich.")
+        medications = [{**m, "quantity": decimal_json(decimal_value(m["stock_before"]) - decimal_value(m["stock_after"]))} for m in booked]
+    delta_sign = int(current["status"] == "taken") - int(status == "taken")
+    amounts: dict[str, Decimal] = {}
+    for item in medications:
+        quantity = decimal_value(item.get("quantity", 0))
+        if quantity <= 0:
+            raise PillPalError("Die historische Einnahmemenge ist nicht eindeutig gespeichert.")
+        med_id = str(item["medication_id"])
+        amounts[med_id] = amounts.get(med_id, Decimal("0")) + quantity * delta_sign
+    if delta_sign and not amounts:
+        raise PillPalError("Für diese Einnahme fehlen historische Medikamentenmengen.")
+    changes = []
+    for med_id, delta in amounts.items():
+        if not delta:
+            continue
+        medication = profile.get("medications", {}).get(med_id)
+        if not medication:
+            raise PillPalError("Ein historisch gebuchtes Medikament ist nicht mehr vorhanden.")
+        historical = next(m for m in medications if m["medication_id"] == med_id)
+        if any(str(medication.get(k)) != str(historical.get(k)) for k in ("unit_singular", "unit_plural")):
+            raise PillPalError(f"Die Einheit von {medication['name']} wurde geändert. Historische Bestandskorrektur nicht möglich.")
+        before = decimal_value(medication.get("stock", 0))
+        if before + delta < 0:
+            raise PillPalError(f"Der Bestand von {medication['name']} reicht für die Korrektur nicht aus. Es wurde nichts geändert.")
+        changes.append({"medication_id": med_id, "stock_before": decimal_json(before), "stock_after": decimal_json(before + delta)})
+    for change in changes:
+        profile["medications"][change["medication_id"]]["stock"] = change["stock_after"]
+    correction = add_event(
+        profile, "intake_correction", now=now, intake_id=intake_id,
+        original_event_id=(terminal_event or {}).get("id"),
+        cycle_id=original.get("cycle_id"), cycle_date=original.get("cycle_date"),
+        slot=original.get("slot"), status=status, previous_status=current["status"],
+        previous_revision=expected_revision, source="manual_correction",
+        actor=actor or "", actor_user_id=actor_user_id,
+        medications=medications, stock_changes=changes,
+    )
+    append_log(
+        profile,
+        f"Abgeschlossene Einnahme korrigiert: {_SLOT_STATUS_LABELS[current['status']]} → "
+        f"{_SLOT_STATUS_LABELS[status]} ({intake_id}).",
+        source="manual_correction", actor=actor, now=now,
+    )
+    return {"status": status, "intake_id": intake_id, "correction_id": correction["id"]}
+
+
 _SLOT_STATUS_LABELS = {
     "planned": "Geplant",
     "notified": "Benachrichtigt",
@@ -4316,6 +4419,7 @@ _SLOT_STATUS_LABELS = {
     "taken": "Eingenommen",
     "skipped": "Übersprungen",
     "missed": "Verpasst",
+    "discarded": "Verworfen",
 }
 
 
@@ -4357,6 +4461,8 @@ def slot_detail(
                 "amount_display": f"{decimal_json(amount)} {unit}",
             }
         )
+    item.setdefault("slot_id", f"{runtime.get('cycle_id')}:{slot}")
+    item = effective_intake(item, intake_corrections(profile))
     status = str(item.get("status") or "not_planned")
     completed_at = (
         item.get("confirmed_at")
@@ -4544,6 +4650,11 @@ def statistics(
                 "snapshot_source": "legacy_terminal_event",
             },
         )
+    corrections = intake_corrections(profile)
+    for stored_slots in slots_by_day.values():
+        for slot_id, stored in stored_slots.items():
+            stored.setdefault("slot_id", slot_id)
+            stored_slots[slot_id] = effective_intake(stored, corrections)
     heatmap: list[dict[str, Any]] = []
     daily: dict[str, dict[str, Any]] = {}
     cursor = period_start
@@ -4558,13 +4669,14 @@ def statistics(
         taken = sum(item.get("status") == "taken" for item in day_slots)
         skipped = sum(item.get("status") == "skipped" for item in day_slots)
         missed = sum(item.get("status") == "missed" for item in day_slots)
-        pending = len(day_slots) - taken - skipped - missed
+        discarded = sum(item.get("status") == "discarded" for item in day_slots)
+        pending = len(day_slots) - taken - skipped - missed - discarded
         prn = [
             event
             for event in events
             if event.get("date") == key and event.get("type") == "as_needed"
         ]
-        planned = len(day_slots)
+        planned = len(day_slots) - discarded
         # The day colour describes the overall result, not the most severe
         # individual slot. A mixed day therefore stays "partial" even when
         # one slot was missed or skipped. "not_occurred" is reserved for a
@@ -4585,6 +4697,7 @@ def statistics(
             "taken": "regular_taken",
             "skipped": "regular_skipped",
             "missed": "regular_missed",
+            "discarded": "regular_discarded",
         }
         for item in day_slots:
             status = str(item.get("status") or "planned")
@@ -4601,6 +4714,7 @@ def statistics(
                     "type": status_type.get(status, "regular_planned"),
                     "timestamp": item.get("completed_at") or item.get("due_at"),
                     "medications": medications,
+                    "all_medications": deepcopy(item.get("medications", [])),
                 }
             )
         bookings.extend(deepcopy(prn))
@@ -4910,7 +5024,10 @@ def snapshot(profile: Mapping[str, Any], now: datetime | None = None) -> dict[st
     )
     runtime = result.get("runtime", {})
     runtime.pop("pending_max_dose_confirmations", None)
-    for slot_data in runtime.get("slots", {}).values():
+    corrections = intake_corrections(profile)
+    for slot, slot_data in runtime.get("slots", {}).items():
+        slot_data.setdefault("slot_id", f"{runtime.get('cycle_id')}:{slot}")
+        slot_data.update(effective_intake(slot_data, corrections))
         slot_data.pop("action_token", None)
         slot_data.pop("notification_action_target", None)
         slot_data.pop("notification_reservation_id", None)

@@ -22,6 +22,7 @@ from .const import (
     SERVICE_BOOK_AS_NEEDED,
     SERVICE_CLEAR_STATISTICS,
     SERVICE_CONFIRM_SLOT,
+    SERVICE_CORRECT_INTAKE,
     SERVICE_DELETE_DOCTOR,
     SERVICE_IMPORT_R410,
     SERVICE_REACTIVATE_MEDICATION,
@@ -153,6 +154,13 @@ async def _run_action(
     actor_user_id: str | None,
 ) -> Any:
     data = dict(data)
+    if action == SERVICE_CORRECT_INTAKE:
+        if "expected_revision" not in data:
+            raise HomeAssistantError("expected_revision ist erforderlich. Bitte den aktuellen Eintrag laden.")
+        return await manager.async_correct_intake(
+            person_id, str(data.get("intake_id", "")), str(data.get("status", "")),
+            str(data["expected_revision"]), actor=actor, actor_user_id=actor_user_id,
+        )
     if "slot" in data:
         data["slot"] = _slot_value(data.get("slot"))
     if "medication_id" in data:
@@ -382,6 +390,7 @@ def async_register_services(hass: HomeAssistant) -> None:
         await _async_import_service(hass, call)
 
     for service in (
+        SERVICE_CORRECT_INTAKE,
         SERVICE_CONFIRM_SLOT,
         SERVICE_SNOOZE_SLOT,
         SERVICE_SKIP_SLOT,
@@ -422,6 +431,7 @@ def async_register_services(hass: HomeAssistant) -> None:
 
 def async_remove_services(hass: HomeAssistant) -> None:
     for service in (
+        SERVICE_CORRECT_INTAKE,
         SERVICE_CONFIRM_SLOT,
         SERVICE_SNOOZE_SLOT,
         SERVICE_SKIP_SLOT,
@@ -492,6 +502,7 @@ async def websocket_bootstrap(
         vol.Required("person_id"): str,
         vol.Required("action"): vol.In(
             [
+                SERVICE_CORRECT_INTAKE,
                 SERVICE_CONFIRM_SLOT,
                 SERVICE_SNOOZE_SLOT,
                 SERVICE_SKIP_SLOT,

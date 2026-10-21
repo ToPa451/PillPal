@@ -465,3 +465,15 @@ th,td,.log-row{border-color:var(--line)}
 @media(max-width:420px){
   .page-praxis .manage-top>.actions button,.page-praxis .doctor-closures .closure-remove{padding-inline:9px}
 }
+
+/* Historical corrections share the statistics page colours and card spacing. */
+.intake-list{display:grid;gap:10px}.intake-list>.intake-entry{margin:0}.intake-entry{display:block;padding:0;min-width:0;overflow-wrap:anywhere}
+.intake-entry>summary{display:flex;align-items:center;gap:12px;cursor:pointer;list-style:none;padding:16px;min-height:56px}
+.intake-entry>summary::-webkit-details-marker{display:none}.intake-entry>summary:focus-visible{outline:2px solid var(--accent);outline-offset:-3px;border-radius:var(--small-radius)}
+.intake-entry>summary>ha-icon{flex:none;color:var(--accent)}.intake-entry[open]>summary>ha-icon{transform:rotate(180deg)}
+.intake-summary{display:grid;grid-template-columns:minmax(130px,.8fr) minmax(140px,1fr) minmax(110px,.8fr) minmax(160px,1.5fr);gap:10px;align-items:start;flex:1;min-width:0}
+article.intake-entry{padding:16px}.intake-summary time,.intake-doctor,.intake-hint{color:var(--secondary-text-color)}
+.intake-discarded .intake-summary{text-decoration:line-through}.intake-editor{padding:0 16px 16px;border-top:1px solid var(--line)}
+.intake-actions{display:flex;flex-wrap:wrap;gap:8px}.intake-actions button{min-height:48px;white-space:normal;text-align:left}
+.intake-hint{font-size:13px;line-height:1.5}.intake-editor p{line-height:1.5}
+@media(max-width:900px){.intake-summary{grid-template-columns:minmax(0,1fr);gap:5px}.intake-summary time{font-size:12px}.intake-doctor{font-size:13px}.intake-entry>summary,article.intake-entry{padding:12px}.intake-actions{display:grid;grid-template-columns:minmax(0,1fr)}.intake-editor{padding:0 12px 12px}.intake-summary .stats-medications{margin:2px 0}}

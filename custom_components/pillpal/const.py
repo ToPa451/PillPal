@@ -7,7 +7,7 @@ from pathlib import Path
 
 DOMAIN = "pillpal"
 NAME = "Pill★Pal"
-VERSION = "5.2.2"
+VERSION = "5.2.3-beta1"
 MIN_HA_VERSION = "2026.8.0"
 
 PLATFORMS = ["sensor", "binary_sensor", "button"]
@@ -31,8 +31,8 @@ SIGNAL_PROFILE_UPDATED = "pillpal_profile_updated_{}"
 
 PANEL_URL = "pillpal"
 ADMIN_PANEL_URL = "pillpal-admin"
-PANEL_COMPONENT = "pillpal-panel-5223"
-STATIC_URL = "/pillpal_static_5223"
+PANEL_COMPONENT = "pillpal-panel-523b1"
+STATIC_URL = "/pillpal_static_523b1"
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 SCHEDULER_INTERVAL = timedelta(seconds=30)
@@ -114,6 +114,7 @@ DEFAULT_SETTINGS = {
 SERVICE_CONFIRM_SLOT = "confirm_slot"
 SERVICE_SNOOZE_SLOT = "snooze_slot"
 SERVICE_SKIP_SLOT = "skip_slot"
+SERVICE_CORRECT_INTAKE = "correct_intake"
 SERVICE_BOOK_AS_NEEDED = "book_as_needed"
 SERVICE_SAVE_MEDICATION = "save_medication"
 SERVICE_ARCHIVE_MEDICATION = "archive_medication"

@@ -1,3 +1,19 @@
+correct_intake:
+  name: Abgeschlossene Einnahme korrigieren
+  description: Korrigiert einen vollständigen regulären Einnahmezeitpunkt und dessen historischen Bestandsabzug. Öffnet keine neue Erinnerung.
+  fields:
+    person_id: {name: Personenprofil, required: true, selector: {device: {filter: [{integration: pillpal}]}}}
+    intake_id: {name: Historische slot_id aus der Statistik, required: true, selector: {text: {}}}
+    expected_revision: {name: Aktuelle correction_id (leer bei unkorrigiertem Eintrag), required: true, selector: {text: {}}}
+    status:
+      name: Zielzustand
+      required: true
+      selector:
+        select:
+          options:
+            - {label: Eingenommen, value: taken}
+            - {label: Übersprungen, value: skipped}
+            - {label: Verworfen, value: discarded}
 confirm_slot:
   name: Einnahme bestätigen
   description: Bestätigt eine fällige regelmäßige Einnahme für genau eine Person.
