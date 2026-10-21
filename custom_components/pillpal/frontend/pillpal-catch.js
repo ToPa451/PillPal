@@ -3,6 +3,26 @@ const LABELS = { morning: 'Morgens', noon: 'Mittags', evening: 'Abends', night: 
 const GREETINGS = { morning: 'Guten Morgen!', noon: 'Guten Mittag!', evening: 'Guten Abend!', night: 'Gute Nacht!' };
 const ENDINGS = { morning: 'Schon Mittag!', noon: 'Schon Abend!', evening: 'Schon Nacht!', night: 'Der nächste Morgen ist da.' };
 const html = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const SKY_LABELS = { morning: 'Sonnenaufgang', noon: 'Sonne', evening: 'Sonnenuntergang', night: 'Mond und Sterne' };
+function skyIcon(slot) {
+  const sun = `<circle cx="32" cy="30" r="12" fill="${slot === 'evening' ? '#ffae78' : '#ffd66d'}"/><path d="M32 7v5m0 36v5M9 30h5m36 0h5M16 14l4 4m24 24 4 4M16 46l4-4m24-24 4-4" stroke="#ffdc7d" stroke-width="3" stroke-linecap="round"/>`;
+  const moon = '<path d="M43 9a23 23 0 1 0 12 34A24 24 0 0 1 43 9Z" fill="#e5d8ff"/><path d="m15 10 1.5 4.5L21 16l-4.5 1.5L15 22l-1.5-4.5L9 16l4.5-1.5ZM53 20l1 3 3 1-3 1-1 3-1-3-3-1 3-1Z" fill="#ffdf89"/>';
+  const horizon = ['morning','evening'].includes(slot);
+  return `<svg viewBox="0 0 64 64" aria-hidden="true">${slot === 'night' ? moon : horizon ? `<svg width="64" height="40" viewBox="0 0 64 40" overflow="hidden">${sun}</svg>` : sun}${horizon ? '<path d="M8 40h48m-40 7h32" stroke="#ffd188" stroke-width="3" stroke-linecap="round"/>' : ''}</svg>`;
+}
+function pillArt(med, extra = '', style = '') {
+  const index = Math.max(0, Number(String(med.code).replace('M','')) - 1) || 0;
+  return `<i aria-hidden="true" class="pill-art ${index % 3 === 0 ? 'tablet' : 'capsule'} palette-${index % 5} ${extra}" style="${style}"><span class="face"></span></i>`;
+}
+const GLASS = `<svg class="glass-art" viewBox="0 0 140 156" preserveAspectRatio="none" aria-hidden="true">
+  <defs><linearGradient id="catch-glass" x1="0" x2="1"><stop stop-color="#b5e8ff" stop-opacity=".28"/><stop offset=".2" stop-color="#dcf6ff" stop-opacity=".05"/><stop offset=".75" stop-color="#dcf6ff" stop-opacity=".02"/><stop offset="1" stop-color="#b5e8ff" stop-opacity=".28"/></linearGradient><linearGradient id="catch-base" x2="0" y2="1"><stop stop-color="#d8f6ff" stop-opacity=".04"/><stop offset="1" stop-color="#a2dbff" stop-opacity=".55"/></linearGradient></defs>
+  <path d="M7 14 19 132Q20 147 70 148T121 132L133 14" fill="url(#catch-glass)" stroke="#aee4ff" stroke-width="2"/>
+  <path d="m19 129 1 10q50 25 100 0l1-10q-51 22-102 0Z" fill="url(#catch-base)" stroke="#bcf0ff" stroke-width="1.5"/>
+  <path d="m16 26 10 98M122 27l-9 83" fill="none" stroke="#e2f8ff" stroke-opacity=".55" stroke-width="3" stroke-linecap="round"/>
+  <path d="m23 27 5 45" stroke="#fff" stroke-opacity=".65" stroke-width="5" stroke-linecap="round"/>
+  <ellipse cx="70" cy="14" rx="63" ry="10" fill="#8ddcff" fill-opacity=".06" stroke="#def7ff" stroke-width="2.5"/>
+  <ellipse cx="70" cy="14" rx="58" ry="6" fill="none" stroke="#8bd2ff" stroke-opacity=".65"/>
+</svg>`;
 
 export function snapshotPlan(profile, date = new Date()) {
   // Current PillPal model has daily doses, no date-dependent medication rules.
@@ -91,13 +111,12 @@ export class PillCatch extends HTMLElement {
     this._resize = () => { this.checkSize(); this.pause(); if (this.dialog.open) this.render(); };
   }
   connectedCallback() {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b6/pillpal-catch.css?v=1"><dialog aria-label="Pill★Catch" tabindex="-1"><div class="shell"></div></dialog>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b7/pillpal-catch.css?v=2"><dialog aria-label="Pill★Catch" tabindex="-1"><div class="shell"></div></dialog>`;
     this.dialog = this.shadowRoot.querySelector('dialog');
     this.shell = this.shadowRoot.querySelector('.shell');
     this.dialog.addEventListener('cancel', e => { e.preventDefault(); this.pause(); });
     this.shadowRoot.addEventListener('click', e => {
       const button = e.target.closest('button'); if (!button) return;
-      if (button.dataset.lane !== undefined) { if (e.detail === 0) this.move(Number(button.dataset.lane)); return; }
       const action = button.dataset.do;
       if (action === 'start') this.start();
       if (action === 'resume') this.prepare();
@@ -154,7 +173,9 @@ export class PillCatch extends HTMLElement {
     this.checkSize();
     if (this.changedProfile || this.tooSmall || document.hidden) { this.mode = 'paused'; this.render(); return; }
     cancelAnimationFrame(this.frame); this.mode = 'ready'; this.readyAt = performance.now() + 1000; this.render();
-    if (!this.round.elapsed && this.shell.querySelector('.field').clientHeight < innerHeight * .4) this.round.fallTime = Math.max(5, this.round.fallTime);
+    const fallHeight = this.landingY() - 34;
+    if (fallHeight < 100) { this.tooSmall = true; this.mode = 'paused'; this.render(); return; }
+    if (!this.round.elapsed && fallHeight < innerHeight * .4) this.round.fallTime = Math.max(5, this.round.fallTime);
     this.last = performance.now(); this.frame = requestAnimationFrame(t => this.tick(t));
   }
   tick(now) {
@@ -187,25 +208,42 @@ export class PillCatch extends HTMLElement {
     return `<ul class="med-list">${[...items].sort((a,b) => Number(this.round.collected.has(a.id)) - Number(this.round.collected.has(b.id))).map(m => `<li><strong>${html(m.code)} · ${html(m.name)}</strong><span>${this.round.collected.has(m.id) ? '✓ Gesammelt' : 'Noch gesucht'}</span></li>`).join('')}</ul>`;
   }
   button(action, label) { return `<button data-do="${action}">${label}</button>`; }
+  contents() {
+    const collected = [...this.round.collected];
+    return collected.slice(0,8).map((id,i) => pillArt(this.plan.meds.find(m => m.id === id), 'collected-pill', `--i:${i}`)).join('') + (collected.length > 8 ? `<b>+${collected.length - 8}</b>` : '');
+  }
+  needs() {
+    const r = this.round;
+    // Reserve space for names, even when the full set contains many targets.
+    const preview = r.missing.slice(0,2);
+    return preview.map(m => `<span class="need-chip ${r.collected.has(m.id) ? 'done' : ''}"><b>${r.collected.has(m.id) ? '✓' : html(m.code)}</b><span>${html(m.name)}</span></span>`).join('');
+  }
   updateCatch() {
     // Preserve the control DOM and its pointer capture throughout a drag.
     const r = this.round;
     this.shell.querySelector('.score').textContent = `${r.score} Punkte`;
-    this.shell.querySelector('.task>div>span').textContent = `${LABELS[r.slot]} · ${r.collected.size} von ${r.targets.length} gesammelt`;
-    this.shell.querySelector('.needs>span').textContent = r.missing.slice(0,2).map(m => `${m.code} · ${m.name}`).join(' / ');
-    this.shell.querySelector('.contents').innerHTML = Array.from(r.collected).slice(0,8).map((_,i) => `<i style="--i:${i}"></i>`).join('') + (r.collected.size > 8 ? `<b>+${r.collected.size - 8}</b>` : '');
+    this.shell.querySelector('.collection-status').textContent = `${LABELS[r.slot]} · ${r.collected.size} von ${r.targets.length} gesammelt`;
+    this.shell.querySelector('.need-preview').innerHTML = this.needs();
+    this.shell.querySelector('.contents').innerHTML = this.contents();
+    this.shell.querySelector('.glass-count').textContent = `${r.collected.size} / ${r.targets.length}`;
+    this.shell.querySelector('.catch-feedback').innerHTML = '<span>+100 ✦</span>';
   }
   render() {
     const focused = this.shadowRoot.activeElement;
     const focusAction = focused?.dataset.do;
-    const focusLane = focused?.dataset.lane;
+    const fieldFocused = focused?.classList.contains('field');
     const r = this.round;
+    this.shell.dataset.slot = r?.slot || 'night';
     let content;
     if (this.mode === 'intro') {
       const plan = snapshotPlan(this.profile);
-      content = `<section class="menu"><div class="eyebrow">VERSTECKTES MINI-SPIEL</div><h1>Pill★Catch entdeckt!</h1><p>Dein Medikamentenplan als Mini-Spiel. Bewege das Glas und sammle alle Medikamente eines Tagesabschnitts.</p><p>${plan.slots.length ? `Profil: ${html(plan.name)} · ${html(plan.date)}` : 'Kein regulärer Plan vorhanden. Du kannst im Demomodus mit Beispieldaten spielen.'}</p><div class="tutorial"><span class="sample-pill">M1</span><p>Fange die gesuchten Kennungen in deinem Glas. <strong>× Hindernis</strong> und Medikamente anderer Abschnitte lässt du vorbeifallen.</p></div><p>Ziehe unten nach links oder rechts, tippe auf eine Spur oder nutze ← → / 1 2 3. Leertaste pausiert. „Alle Medikamente“ zeigt die vollständigen Namen bei angehaltener Uhr.</p><p>Die Spielzeit ist fiktiv. Kennungen unterscheiden auch gleiche Namen; sie sind keine Dosierungen.</p><strong>Nur ein Spiel · keine Einnahmebestätigung</strong><div class="actions">${this.button('start', plan.slots.length ? 'Spiel starten' : 'Demomodus starten')}${this.button('close','Zurück')}</div></section>`;
+      content = `<section class="menu intro"><div class="intro-art" aria-hidden="true">${pillArt({code:'M2'})}${pillArt({code:'M1'})}<span>✦</span></div><div class="eyebrow">DEIN KLEINES PLAN-ABENTEUER</div><h1>Pill<span class="brand-star">★</span>Catch entdeckt!</h1><p>Dein Medikamentenplan als Mini-Spiel. Bewege das Glas und sammle alle Medikamente eines Tagesabschnitts.</p><p>${plan.slots.length ? `Profil: ${html(plan.name)} · ${html(plan.date)}` : 'Kein regulärer Plan vorhanden. Du kannst im Demomodus mit Beispieldaten spielen.'}</p><div class="tutorial">${pillArt({code:'M3'})}<p>Fange die gesuchten Kennungen in deinem Glas. <strong>× Hindernis</strong> und Medikamente anderer Abschnitte lässt du vorbeifallen.</p></div><p>Tippe direkt ins Spielfeld oder ziehe unten nach links oder rechts. Auch ← → / 1 2 3 bewegen das Glas. Leertaste pausiert. „Alle Medikamente“ zeigt die vollständigen Namen bei angehaltener Uhr.</p><p>Die Spielzeit ist fiktiv. Farben und Pillenformen sind Spielgrafiken; Kennungen sind keine Dosierungen.</p><strong class="game-notice">Nur ein Spiel · keine Einnahmebestätigung</strong><div class="actions">${this.button('start', plan.slots.length ? 'Spiel starten' : 'Demomodus starten')}${this.button('close','Zurück')}</div></section>`;
     } else if (['ready','running'].includes(this.mode)) {
-      content = `<header><strong>Pill★Catch</strong><span class="score">${r.score} Punkte</span>${this.button('pause','Pause')}</header><section class="task" aria-live="polite"><strong>${GREETINGS[r.slot]} Sammle dein ${LABELS[r.slot]}-Set.</strong><div><span>${LABELS[r.slot]} · ${r.collected.size} von ${r.targets.length} gesammelt</span><span class="time"></span></div><progress max="${r.budget}" value="${r.budget - r.elapsed}" aria-label="Verbleibende Spielzeit"></progress></section><div class="needs"><span>${r.missing.slice(0,2).map(m => `${html(m.code)} · ${html(m.name)}`).join(' / ')}</span>${this.button('list',`Alle Medikamente (${r.targets.length})`)}</div><div class="field" aria-label="Drei Fangspuren"><div class="lanes"></div><div class="falling" aria-hidden="true"></div><div class="glass" aria-label="Glas"><div class="rim"></div><div class="contents">${Array.from(r.collected).slice(0,8).map((_,i) => `<i style="--i:${i}"></i>`).join('')}${r.collected.size > 8 ? `<b>+${r.collected.size - 8}</b>` : ''}</div></div>${this.mode === 'ready' ? '<div class="ready">Bereit?</div>' : ''}</div><div class="controls" aria-label="Glas bewegen">${['Links','Mitte','Rechts'].map((l,i) => `<button data-lane="${i}" aria-label="Spur ${i+1}: ${l}">${l}</button>`).join('')}</div><footer>${this.demo ? 'Demomodus · Beispieldaten' : 'Spielmodus'} · Spieltag ${r.day + 1} · Ziehen oder Spur antippen</footer>`;
+      content = `<header><strong>Pill<span class="brand-star">★</span>Catch</strong><span class="score">${r.score} Punkte</span>${this.button('pause','Pause')}</header>
+        <section class="task"><div class="task-heading"><div class="sky-icon" role="img" aria-label="${SKY_LABELS[r.slot]}">${skyIcon(r.slot)}</div><div><strong>${GREETINGS[r.slot]}</strong><span>Sammle dein ${LABELS[r.slot]}-Set.</span></div></div><div class="task-status"><span class="collection-status" aria-live="polite">${LABELS[r.slot]} · ${r.collected.size} von ${r.targets.length} gesammelt</span><span class="time"></span></div><div class="time-track"><progress max="${r.budget}" value="${r.budget-r.elapsed}" aria-label="Verbleibende Spielzeit"></progress><span class="time-spark" aria-hidden="true">✦</span></div></section>
+        <div class="needs"><div class="need-preview">${this.needs()}</div>${this.button('list',`Alle Medikamente (${r.targets.length})`)}</div>
+        <div class="field" tabindex="0" role="group" aria-label="Spielfeld mit drei Fangspuren. Tippen oder ziehen bewegt das Glas. Tastatur: Pfeile oder 1, 2, 3."><div class="scene-sky" aria-hidden="true">${skyIcon(r.slot)}</div><div class="lanes" aria-hidden="true"></div><div class="falling" aria-hidden="true"></div><div class="glass" aria-label="Glas"><span class="glass-count">${r.collected.size} / ${r.targets.length}</span><span class="rim" aria-hidden="true"></span>${GLASS}<div class="contents">${this.contents()}</div><div class="catch-feedback" aria-hidden="true"></div></div><div class="controls" aria-hidden="true"><span>‹</span><span class="drag-hint">Glas hier bewegen<span class="drag-line"></span></span><span>›</span></div>${this.mode === 'ready' ? '<div class="ready"><span>✦</span>Bereit?</div>' : ''}</div>
+        <footer>${this.demo ? 'Demomodus · Beispieldaten' : 'Spielmodus'} · Spieltag ${r.day+1} · Tippen oder ziehen</footer>`;
     } else if (this.mode === 'list') {
       content = `<section class="menu"><h1>Alle Medikamente</h1><p>${LABELS[r.slot]} · ${r.collected.size} von ${r.targets.length} gesammelt · Spiel pausiert</p>${this.list()}${this.button('back','Zurück zur Pause')}</section>`;
     } else if (this.mode === 'paused') {
@@ -213,31 +251,39 @@ export class PillCatch extends HTMLElement {
     } else {
       const success = this.mode === 'success';
       const dayDone = success && r.index + 1 === this.plan.slots.length;
-      content = `<section class="menu"><h1>${dayDone ? 'Tagesplan komplett gesammelt!' : success ? `${LABELS[r.slot]}-Set vollständig!` : 'Runde vorbei'}</h1><p>${success ? 'Gut gefangen! Dein Glas ist vollständig.' : html(r.reason)}</p><div class="result">${r.score} Punkte</div><p>${r.catches} richtige Fänge · ${r.completed} geschaffte Abschnitte · Rekord ${this.record}</p>${r.outcome === 'timeout' ? `<h2>Noch fehlend</h2>${this.list(r.missing)}` : ''}<p>Dein Medikamentenplan bleibt unverändert.</p><div class="actions">${success ? this.button('next',dayDone ? 'Nächster Spieltag' : 'Nächster Abschnitt') : ''}${this.button('start','Noch einmal')}${this.button('close','Zurück zu Log & Info')}</div></section>`;
+      content = `<section class="menu"><div class="result-art" aria-hidden="true">${success ? '✦' : '☆'}</div><h1>${dayDone ? 'Tagesplan komplett gesammelt!' : success ? `${LABELS[r.slot]}-Set vollständig!` : 'Runde vorbei'}</h1><p>${success ? 'Gut gefangen! Dein Glas ist vollständig.' : html(r.reason)}</p><div class="result">${r.score} Punkte</div><p>${r.catches} richtige Fänge · ${r.completed} geschaffte Abschnitte · Rekord ${this.record}</p>${r.outcome === 'timeout' ? `<h2>Noch fehlend</h2>${this.list(r.missing)}` : ''}<p>Dein Medikamentenplan bleibt unverändert.</p><div class="actions">${success ? this.button('next',dayDone ? 'Nächster Spieltag' : 'Nächster Abschnitt') : ''}${this.button('start','Noch einmal')}${this.button('close','Zurück zu Log & Info')}</div></section>`;
     }
     this.shell.innerHTML = content;
     if (['ready','running'].includes(this.mode)) { this.bindPointer(); this.paint(); }
-    const nextFocus = focusLane !== undefined ? this.shell.querySelector(`[data-lane="${focusLane}"]`) : focusAction ? this.shell.querySelector(`[data-do="${focusAction}"]`) : null;
+    const nextFocus = fieldFocused ? this.shell.querySelector('.field') : focusAction ? this.shell.querySelector(`[data-do="${focusAction}"]`) : null;
     (nextFocus || this.shell.querySelector('button'))?.focus({preventScroll:true});
   }
   bindPointer() {
-    const controls = this.shell.querySelector('.controls');
+    const controls = this.shell.querySelector('.field');
     const select = e => { const rect = controls.getBoundingClientRect(); this.move(Math.floor((e.clientX - rect.left) / rect.width * 3)); };
-    controls.onpointerdown = e => { if (!e.isPrimary) return; this.pointer = e.pointerId; controls.setPointerCapture(e.pointerId); select(e); };
+    controls.onpointerdown = e => { if (!e.isPrimary || e.button !== 0) return; this.pointer = e.pointerId; controls.setPointerCapture(e.pointerId); controls.focus({preventScroll:true}); select(e); };
     controls.onpointermove = e => { if (this.pointer === e.pointerId) select(e); };
     const end = e => { if (this.pointer === e.pointerId) { this.pointer = null; if (controls.hasPointerCapture(e.pointerId)) controls.releasePointerCapture(e.pointerId); } };
     controls.onpointerup = end; controls.onpointercancel = end; controls.onlostpointercapture = () => { this.pointer = null; };
   }
+  landingY() {
+    const field = this.shell.querySelector('.field');
+    return this.shell.querySelector('.rim').getBoundingClientRect().top - field.getBoundingClientRect().top - field.clientTop;
+  }
   paint() {
     const r = this.round; const field = this.shell.querySelector('.field'); if (!field) return;
-    // Collision plane is the center of the visible rim, 68px above field bottom.
-    // Object center reaches that plane at o.land. Side/bottom contacts never count.
-    const travel = Math.max(1, field.clientHeight - 68 - 30);
-    this.shell.querySelector('.falling').innerHTML = r.objects.map(o => `<div class="object ${o.med.id === 'obstacle' ? 'obstacle' : ''}" style="left:${(o.lane + .5) / 3 * 100}%;top:${30 + (r.elapsed - o.born) / r.fallTime * travel}px"><b>${html(o.med.code)}</b><span>${html(o.med.name)}</span></div>`).join('');
+    // Read the responsive glass opening: the pill's center reaches that exact
+    // plane at o.land. Labels are separate; side/bottom contacts never count.
+    const travel = Math.max(1, this.landingY() - 34);
+    this.shell.querySelector('.falling').innerHTML = r.objects.map(o => {
+      const phase = (r.elapsed-o.born)/r.fallTime;
+      return `<div class="object ${o.med.id === 'obstacle' ? 'obstacle' : ''}" style="left:${(o.lane+.5)/3*100}%;top:${34+phase*travel}px;--label-opacity:${Math.max(0,Math.min(1,(.98-phase)/.14))}">${o.med.id === 'obstacle' ? '<i class="obstacle-art">×</i>' : pillArt(o.med)}<div class="object-label"><b>${html(o.med.code)}</b><span>${html(o.med.name)}</span></div></div>`;
+    }).join('');
     this.shell.querySelector('.glass').style.left = `${(r.lane + .5) / 3 * 100}%`;
     this.shell.querySelector('.time').textContent = `${Math.ceil(r.budget - r.elapsed)} s`;
     this.shell.querySelector('progress').value = r.budget - r.elapsed;
-    this.shell.querySelectorAll('[data-lane]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.lane) === r.lane)));
+    this.shell.querySelector('.time-spark').style.left = `${Math.max(0,1-r.elapsed/r.budget)*100}%`;
+    field.style.setProperty('--active-lane', r.lane);
   }
   dispose() {
     const back = this.inHistory; this.inHistory = false;

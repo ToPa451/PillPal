@@ -5,16 +5,20 @@ Das Easteregg wird auf **Log & Info** durch Klick oder Tap auf die Versionsnumme
 ## Einbindung
 
 - `frontend/pillpal-catch.js`: verzögert geladenes Spielmodul mit separater Planableitung, deterministisch prüfbarer Spielsimulation und Dialogoberfläche.
-- `frontend/pillpal-catch.css`: eigene, an Home-Assistant-Themevariablen angepasste Darstellung, drei Spuren, transparentes Glas und mobile Ansicht.
+- `frontend/pillpal-catch.css`: an Home-Assistant-Themevariablen angepasste Oberfläche mit farbigem Spielfeld, drei Spuren, transparentem Trinkglas und mobiler Ansicht. Sonne, Sonnenaufgang, Sonnenuntergang beziehungsweise Mond und Sterne folgen dem Spiel-Tagesabschnitt.
 - Die Komponente hat keine Home-Assistant-Verbindung. Nur der Rekord wird lokal gespeichert, getrennt nach Profil sowie Echtplan/Demomodus; Namen und Pläne werden nicht dauerhaft abgelegt.
 
 Die aktuelle Datenstruktur enthält tägliche Dosierungen je grobem Tagesabschnitt. Tagesabhängige Zeitpläne ändern die Uhrzeiten, nicht die Medikamentenzuordnung. Deshalb dienen positive reguläre `doses` im aktiven Profil als Ziele, unabhängig von bereits bestätigten Einnahmen oder Beständen. Archivierte und reine Bedarfsmedikamente entfallen. Die beim Start erzeugte Momentaufnahme bleibt für weitere Spieltage bestehen; ein Neustart liest den aktuellen Plan.
 
 Alle Medikamente erhalten für den gesamten Durchlauf eindeutige M-Kennungen. Diese unterscheiden auch gleiche Anzeigenamen, ohne zusätzliche medizinische Angaben zu erfinden. Die vollständige Liste mit Namen und Sammelstatus ist im pausierten Spiel erreichbar. Viele Ziele verlängern das Zeitbudget; acht Symbole und ein Zusatzbadge stellen den Glasinhalt dar.
 
-Die Simulation verarbeitet Landungen chronologisch vor dem Zeitablauf, einschließlich der Deadline. Die Fangzone liegt auf der sichtbaren Glasöffnung. Nach einem vollständigen Abschnitt erfolgt der Übergang bewusst per Schaltfläche; nach einem vollständigen Tag kann derselbe Plan mit höherer Schwierigkeit weitergespielt werden.
+Tabletten und Kapseln werden als farbige Spielgrafiken mit Glanz und kurzen Fang-Effekten dargestellt. Die feste M-Kennung und der Namensauszug stehen auf einem eigenen Schild unterhalb des Objekts. Die Grafiken stellen keine realen Präparate dar. Die begrenzte Vorschau zeigt höchstens zwei noch gesuchte Ziele; gesammelte Ziele bleiben mit Häkchen in der vollständigen Liste erreichbar.
 
-Browser-Zurück verbirgt und pausiert die Runde. Erneutes Öffnen über die Version stellt die Pause wieder her. „Spiel verlassen“ beendet die Runde. Tabwechsel, Rotation, Größenänderungen und Detailansichten halten das Spiel ebenfalls an. Unter 480 CSS-Pixeln Höhe fordert die Pause mehr Platz beziehungsweise Hochformat an.
+Das gesamte Spielfeld reagiert direkt auf Tippen, Drücken und horizontales Ziehen. Separate Links-/Mitte-/Rechts-Schaltflächen entfallen. Eine dezente Bedienhilfe liegt am unteren Spielfeldrand; Pfeiltasten und 1/2/3 bleiben verfügbar. Pointer Capture bleibt während eines Fangs erhalten, und ein Abbruch der Geste räumt den Pointer-Zustand auf.
+
+Die Simulation verarbeitet Landungen chronologisch vor dem Zeitablauf, einschließlich der Deadline. Die Fangzone liegt auf der sichtbaren Glasöffnung. Ihre Höhe wird aus der responsiven Glasdarstellung abgeleitet; der Mittelpunkt der Pille erreicht sie zum Fangzeitpunkt. Bei kurzer verbleibender Fallstrecke wird das Anfangstempo reduziert. Nach einem vollständigen Abschnitt erfolgt der Übergang bewusst per Schaltfläche; nach einem vollständigen Tag kann derselbe Plan mit höherer Schwierigkeit weitergespielt werden.
+
+Browser-Zurück verbirgt und pausiert die Runde. Erneutes Öffnen über die Version stellt die Pause wieder her. „Spiel verlassen“ beendet die Runde. Tabwechsel, Rotation, Größenänderungen und Detailansichten halten das Spiel ebenfalls an. Unter 480 CSS-Pixeln Höhe oder bei weniger als 100 Pixeln nutzbarer Fallstrecke fordert die Pause mehr Platz beziehungsweise Hochformat an.
 
 ## Prüfung
 

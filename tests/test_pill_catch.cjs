@@ -36,7 +36,7 @@ const meds = n => Array.from({length:n},(_,i) => ({id:`med-${i}`,name:i < 2 ? 'I
   assert.match(await page.locator('pillpal-catch .shell').innerText(),/Pill★Catch entdeckt/);
   // Pure engine acceptance tests in the same production ES module.
   const result = await page.evaluate(async()=>{
-   const {snapshotPlan,CatchRound}=await import('/pillpal_static_523b6/pillpal-catch.js?v=1');
+   const {snapshotPlan,CatchRound}=await import('/pillpal_static_523b7/pillpal-catch.js?v=2');
    const p=snapshotPlan({...saved,medications:[...saved.medications,{id:'archive',name:'Archived',archived:true,doses:{morning:1}},{id:'prn',name:'PRN',pure_as_needed:true,doses:{}},saved.medications[0]]});
    if(p.meds.length!==20 || p.slots.length!==2) throw Error('adapter exclusions / duplicate ID');
    saved.medications[0].name='CHANGED'; if(p.meds[0].name==='CHANGED') throw Error('snapshot changed');
@@ -74,6 +74,14 @@ const meds = n => Array.from({length:n},(_,i) => ({id:`med-${i}`,name:i < 2 ? 'I
   assert.equal(result.targets,20);
   await page.locator('pillpal-catch [data-do="start"]').click();
   await page.waitForFunction(()=>document.querySelector('pillpal-catch').mode==='running');
+  assert.equal(await page.locator('pillpal-catch [data-lane]').count(),0);
+  assert.equal(await page.locator('pillpal-catch .sky-icon').getAttribute('aria-label'),'Sonnenaufgang');
+  // Tap anywhere in a lane: no separate directional buttons are needed.
+  const fieldBounds=await page.locator('pillpal-catch .field').boundingBox();
+  for (const lane of [0,1,2]) {
+   await page.touchscreen.tap(fieldBounds.x+fieldBounds.width*(lane+.5)/3,fieldBounds.y+fieldBounds.height-45);
+   assert.equal(await page.evaluate(()=>document.querySelector('pillpal-catch').round.lane),lane);
+  }
   await page.locator('pillpal-catch [data-do="list"]').click();
   assert.equal(await page.locator('pillpal-catch .med-list li').count(),20);
   const time=await page.evaluate(()=>document.querySelector('pillpal-catch').round.elapsed);
@@ -102,11 +110,16 @@ const meds = n => Array.from({length:n},(_,i) => ({id:`med-${i}`,name:i < 2 ? 'I
   assert.equal(await page.evaluate(()=>document.querySelector('pillpal-catch').shell.querySelector('.controls')===originalControls),true);
   await page.mouse.move(control.x+control.width-15,control.y+20);await page.mouse.up();
   assert.equal(await page.evaluate(()=>document.querySelector('pillpal-catch').round.lane),2);
+  await page.mouse.down();
+  await page.evaluate(()=>{const g=document.querySelector('pillpal-catch');g.shell.querySelector('.field').dispatchEvent(new PointerEvent('pointercancel',{pointerId:g.pointer}));});
+  assert.equal(await page.evaluate(()=>document.querySelector('pillpal-catch').pointer),null);
+  await page.mouse.up();
   await page.keyboard.press('Escape');
   assert.equal(await page.evaluate(()=>document.querySelector('pillpal-catch').mode),'paused');
   await page.evaluate(()=>history.back());
   await page.waitForFunction(()=>!document.querySelector('pillpal-catch').dialog.open);
   await page.locator('[data-action="pill-catch"]').click();
+  await page.waitForFunction(()=>document.querySelector('pillpal-catch').dialog.open);
   assert.equal(await page.evaluate(()=>document.querySelector('pillpal-catch').mode),'paused');
   await page.evaluate(()=>{saved.person_id='person.other';panel._data.profile=saved;panel._render();});
   assert.equal(await page.locator('pillpal-catch [data-do="resume"]').count(),0);
@@ -135,17 +148,32 @@ const meds = n => Array.from({length:n},(_,i) => ({id:`med-${i}`,name:i < 2 ? 'I
     g.round.objects=[];g.round.spawn();g.round.elapsed=1;
     g.mode='running';g.render();
     const root=g.shadowRoot;const field=root.querySelector('.field').getBoundingClientRect();
+    const object=g.round.objects[0],oldTime=g.round.elapsed;
+    g.round.elapsed=object.land;g.paint();
+    const landingError=Math.abs(parseFloat(root.querySelector('.object').style.top)-g.landingY());
+    g.round.elapsed=oldTime;g.paint();
     return {overflow:root.querySelector('.shell').scrollWidth>innerWidth,field:field.height,
-     right:root.querySelector('.controls').getBoundingClientRect().right,
-     bottom:root.querySelector('.controls').getBoundingClientRect().bottom,
-     pills:root.querySelectorAll('.contents i').length,badge:root.querySelector('.contents b')?.textContent};
+     right:root.querySelector('.field').getBoundingClientRect().right,
+     bottom:root.querySelector('.field').getBoundingClientRect().bottom,
+     glassHeight:root.querySelector('.glass').getBoundingClientRect().height,
+     landing:g.landingY(),landingError,
+     pills:root.querySelectorAll('.contents > .pill-art').length,badge:root.querySelector('.contents b')?.textContent};
    });
    assert.equal(layout.overflow,false);assert.ok(layout.field>=200);assert.ok(layout.right<=width);assert.ok(layout.bottom<=740);assert.equal(layout.pills,8);assert.equal(layout.badge,'+4');
+   assert.ok(layout.glassHeight>=100);assert.ok(layout.landing>100 && layout.landing<layout.field-80);
+   assert.ok(layout.landingError<.01);
    if(process.env.PILLPAL_SCREENSHOTS) {
     fs.mkdirSync(process.env.PILLPAL_SCREENSHOTS,{recursive:true});
     for(const dark of [false,true]) {
      await page.evaluate(dark=>{document.querySelector('pillpal-catch').style.cssText=dark?'--card-background-color:#252b36;--primary-text-color:#eff2f8;--primary-color:#b49bdd;--secondary-text-color:#c1c9d5;--divider-color:#687187':'';},dark);
      await page.screenshot({path:path.join(process.env.PILLPAL_SCREENSHOTS,`catch-${width}-${dark?'dark':'light'}.png`)});
+    }
+    if(width===390) {
+     for(const slot of ['morning','noon','evening','night']) {
+      await page.evaluate(slot=>{const g=document.querySelector('pillpal-catch');g.round.slot=slot;g.mode='running';g.render();},slot);
+      await page.screenshot({path:path.join(process.env.PILLPAL_SCREENSHOTS,`catch-scene-${slot}.png`)});
+     }
+     await page.evaluate(()=>{document.querySelector('pillpal-catch').round.slot='morning';});
     }
    }
    await page.evaluate(()=>document.querySelector('pillpal-catch').pause());
@@ -153,9 +181,32 @@ const meds = n => Array.from({length:n},(_,i) => ({id:`med-${i}`,name:i < 2 ? 'I
   await page.setViewportSize({width:740,height:390});
   await page.waitForTimeout(100);
   assert.match(await page.locator('pillpal-catch .shell').innerText(),/Hochformat/);
+  for(const height of [480,568,667]) {
+   await page.setViewportSize({width:320,height});await page.waitForTimeout(100);
+   await page.evaluate(()=>{const g=document.querySelector('pillpal-catch');g.checkSize();g.prepare();});
+   const compact=await page.evaluate(()=>{
+    const g=document.querySelector('pillpal-catch');
+    return {paused:g.mode==='paused',small:g.tooSmall,travel:g.mode==='paused'?0:g.landingY()-34,
+     bottom:g.shell.querySelector('footer')?.getBoundingClientRect().bottom||0};
+   });
+   if(compact.paused) assert.equal(compact.small,true);
+   else { assert.ok(compact.travel>=100);assert.ok(compact.bottom<=height); }
+   await page.evaluate(()=>document.querySelector('pillpal-catch').pause());
+  }
   // Visibility pause, no background clock, and storage denial keep game usable.
   await page.setViewportSize({width:390,height:844});
   await page.waitForTimeout(100);
+  if(process.env.PILLPAL_SCREENSHOTS) {
+   await page.evaluate(async()=>{
+    const {snapshotPlan,CatchRound}=await import('/pillpal_static_523b7/pillpal-catch.js?v=2');
+    const g=document.querySelector('pillpal-catch');
+    g.plan=snapshotPlan({medications:['Vitamin D','Magnesium','Vitamin B12'].map((name,i)=>({id:`preview-${i}`,name,doses:{morning:1}}))});
+    g.round=new CatchRound(g.plan);g.round.catch(g.round.targets[0]);g.round.catch(g.round.targets[1]);
+    g.round.elapsed=1.4;g.round.objects=[{med:g.round.targets[2],lane:2,born:0,land:4}];g.mode='running';g.render();
+   });
+   await page.locator('pillpal-catch dialog').screenshot({path:path.join(process.env.PILLPAL_SCREENSHOTS,'catch-preview.png')});
+   await page.evaluate(()=>document.querySelector('pillpal-catch').pause());
+  }
   await page.evaluate(()=>{const g=document.querySelector('pillpal-catch');g.checkSize();g.prepare();});
   await page.waitForFunction(()=>document.querySelector('pillpal-catch').mode==='running');
   await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
