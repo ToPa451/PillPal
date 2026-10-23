@@ -576,6 +576,44 @@ class PillPalPanel extends HTMLElement {
     }
   }
 
+  async _writeClipboard(text) {
+    let clipboardError = null;
+    if (typeof navigator.clipboard?.writeText === "function") {
+      try {
+        await navigator.clipboard.writeText(text);
+        return;
+      } catch (err) {
+        clipboardError = err;
+      }
+    }
+
+    const focused = this.shadowRoot.activeElement || document.activeElement;
+    const selection = document.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.readOnly = true;
+    textarea.setAttribute("aria-hidden", "true");
+    textarea.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none";
+    document.body.append(textarea);
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    let copied = false;
+    try {
+      copied = typeof document.execCommand === "function" && document.execCommand("copy");
+    } finally {
+      textarea.remove();
+      focused?.focus?.();
+      if (range && selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }
+    if (!copied) {
+      throw clipboardError || new Error("Der Browser erlaubt keinen Zugriff auf die Zwischenablage.");
+    }
+  }
+
   async _handleAction(action, target) {
     if (action === "add-time-plan" || action === "remove-time-plan") {
       if (action === "remove-time-plan") target.closest(".time-plan").remove();
@@ -650,7 +688,7 @@ class PillPalPanel extends HTMLElement {
       await this._call("clear_statistics", {}, "Statistikdaten werden gelöscht …", "Statistikdaten wurden gelöscht.");
     } else if (action === "copy-order") {
       try {
-        await navigator.clipboard.writeText(this._inventoryClipboardText || this._data?.profile?.order_plan?.clipboard_text || "");
+        await this._writeClipboard(this._inventoryClipboardText || this._data?.profile?.order_plan?.clipboard_text || "");
         this._feedback = { type: "success", text: "Bestelltext wurde in die Zwischenablage kopiert.", scope: "page" };
       } catch (err) {
         this._feedback = { type: "error", text: `Bestelltext konnte nicht kopiert werden: ${err?.message || err}`, scope: "page" };

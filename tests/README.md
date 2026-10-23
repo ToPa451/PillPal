@@ -4,10 +4,11 @@ Run the model, transaction, and authorization tests with Python:
 python -m unittest discover -s tests -v
 ```
 
-The statistics refresh regression test requires Node.js, the `playwright` package, and a Playwright browser:
+The browser regression tests require Node.js, the `playwright` package, and a Playwright browser:
 
 ```sh
 node tests/test_statistics_refresh.cjs
+node tests/test_order_clipboard.cjs
 node tests/test_time_plans.cjs
 node tests/test_pill_catch.cjs
 ```
