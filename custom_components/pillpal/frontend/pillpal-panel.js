@@ -305,7 +305,7 @@ class PillPalPanel extends HTMLElement {
       if (this._catchLoading) return;
       this._catchLoading = true;
       try {
-        const { PillCatch } = await import('/pillpal_static_523b7/pillpal-catch.js?v=2');
+        const { PillCatch } = await import('/pillpal_static_524/pillpal-catch.js?v=2');
         if (!this._connected) return;
         if (!this._catchGame?.isConnected) {
           this._catchGame = new PillCatch();
@@ -576,6 +576,44 @@ class PillPalPanel extends HTMLElement {
     }
   }
 
+  async _writeClipboard(text) {
+    let clipboardError = null;
+    if (typeof navigator.clipboard?.writeText === "function") {
+      try {
+        await navigator.clipboard.writeText(text);
+        return;
+      } catch (err) {
+        clipboardError = err;
+      }
+    }
+
+    const focused = this.shadowRoot.activeElement || document.activeElement;
+    const selection = document.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.readOnly = true;
+    textarea.setAttribute("aria-hidden", "true");
+    textarea.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none";
+    document.body.append(textarea);
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    let copied = false;
+    try {
+      copied = typeof document.execCommand === "function" && document.execCommand("copy");
+    } finally {
+      textarea.remove();
+      focused?.focus?.();
+      if (range && selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }
+    if (!copied) {
+      throw clipboardError || new Error("Der Browser erlaubt keinen Zugriff auf die Zwischenablage.");
+    }
+  }
+
   async _handleAction(action, target) {
     if (action === "add-time-plan" || action === "remove-time-plan") {
       if (action === "remove-time-plan") target.closest(".time-plan").remove();
@@ -650,7 +688,7 @@ class PillPalPanel extends HTMLElement {
       await this._call("clear_statistics", {}, "Statistikdaten werden gelöscht …", "Statistikdaten wurden gelöscht.");
     } else if (action === "copy-order") {
       try {
-        await navigator.clipboard.writeText(this._inventoryClipboardText || this._data?.profile?.order_plan?.clipboard_text || "");
+        await this._writeClipboard(this._inventoryClipboardText || this._data?.profile?.order_plan?.clipboard_text || "");
         this._feedback = { type: "success", text: "Bestelltext wurde in die Zwischenablage kopiert.", scope: "page" };
       } catch (err) {
         this._feedback = { type: "error", text: `Bestelltext konnte nicht kopiert werden: ${err?.message || err}`, scope: "page" };
@@ -844,11 +882,11 @@ class PillPalPanel extends HTMLElement {
   }
 
   _renderLoading() {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b7/pillpal.css?v=523b7"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_524/pillpal.css?v=524"><div class="loading"><ha-circular-progress active></ha-circular-progress><p>Pill★Pal wird geladen …</p></div>`;
   }
 
   _renderFatal(err) {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b7/pillpal.css?v=523b7"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_524/pillpal.css?v=524"><div class="empty error"><ha-icon icon="mdi:alert-circle-outline"></ha-icon><h2>Pill★Pal konnte nicht geladen werden</h2><p>${esc(err?.message || err)}</p></div>`;
   }
 
   _render() {
@@ -872,12 +910,12 @@ class PillPalPanel extends HTMLElement {
       const text = this._adminMode
         ? "Es gibt keine Person, deren Profil du als Administrator betreuen darfst."
         : "Dein Home-Assistant-Benutzer ist keiner aufgenommenen Person zugeordnet.";
-      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b7/pillpal.css?v=523b7"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
+      this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_524/pillpal.css?v=524"><main class="no-profile"><section class="empty"><ha-icon icon="mdi:account-alert-outline"></ha-icon><h1>Pill★Pal</h1><p>${text}</p><small>Öffne Einstellungen → Geräte & Dienste → Pill★Pal, um Personen hinzuzufügen oder die Assistenz zu konfigurieren.</small></section></main>`;
       return;
     }
     const meta = PAGE_META[this._page];
     const markup = `
-      <link rel="stylesheet" href="/pillpal_static_523b7/pillpal.css?v=523b7">
+      <link rel="stylesheet" href="/pillpal_static_524/pillpal.css?v=524">
       <style>:host{--accent:${meta[1]}}</style>
       <main class="app page-${this._page} ${this.hass?.themes?.darkMode ? "theme-dark" : "theme-light"}">
         <header class="mobile-toolbar"><ha-menu-button></ha-menu-button><strong>Pill★Pal · ${meta[0]}</strong></header>
@@ -1275,4 +1313,4 @@ class PillPalPanel extends HTMLElement {
   }
 }
 
-if (!customElements.get("pillpal-panel-523b7")) customElements.define("pillpal-panel-523b7", PillPalPanel);
+if (!customElements.get("pillpal-panel-524")) customElements.define("pillpal-panel-524", PillPalPanel);

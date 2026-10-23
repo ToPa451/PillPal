@@ -111,7 +111,7 @@ export class PillCatch extends HTMLElement {
     this._resize = () => { this.checkSize(); this.pause(); if (this.dialog.open) this.render(); };
   }
   connectedCallback() {
-    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_523b7/pillpal-catch.css?v=2"><dialog aria-label="Pill★Catch" tabindex="-1"><div class="shell"></div></dialog>`;
+    this.shadowRoot.innerHTML = `<link rel="stylesheet" href="/pillpal_static_524/pillpal-catch.css?v=2"><dialog aria-label="Pill★Catch" tabindex="-1"><div class="shell"></div></dialog>`;
     this.dialog = this.shadowRoot.querySelector('dialog');
     this.shell = this.shadowRoot.querySelector('.shell');
     this.dialog.addEventListener('cancel', e => { e.preventDefault(); this.pause(); });
