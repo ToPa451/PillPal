@@ -17,6 +17,17 @@ Pill★Pal is a Home Assistant–based medication manager optimized for mobile s
 - Support for as-needed medication and configurable safety limits
 - Optional admin-assisted medication intake
 
+## What's new in 5.2.4
+
+- Copying the generated medication order now works when Home Assistant is opened through a local HTTP address where the modern Clipboard API is unavailable.
+- Secure connections continue to use the modern Clipboard API. Local HTTP connections use a browser-compatible fallback.
+
+### Update to 5.2.4
+
+Create a Home Assistant backup, download **5.2.4** in HACS, and restart Home Assistant. Then reload the Pill★Pal dashboard or restart the Companion App so the updated frontend is loaded.
+
+The data schema remains at **13**. Existing medication, stock, history, schedules, and settings remain unchanged.
+
 ## What's new in 5.2.3
 
 - Correct completed regular intakes as taken, skipped, or discarded from **Statistics**, with stock and statistics updated together and an audit trail retained. Discarded regular intakes can be restored.
